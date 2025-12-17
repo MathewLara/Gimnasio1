@@ -6,14 +6,14 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.util.List;
-import java.util.regex.Pattern;
+import java.util.Random; // Necesario para generar el código
 
 @Path("/usuarios") // URL base: /api/usuarios
 public class UsuarioController {
 
     private UsuarioDAO dao = new UsuarioDAO();
 
-    // 1. GET: Obtener todos (READ)
+    // 1. GET: Obtener todos
     @GET
     @Produces(MediaType.APPLICATION_JSON)
     public Response listarUsuarios() {
@@ -21,7 +21,7 @@ public class UsuarioController {
         return Response.ok(lista).build();
     }
 
-    // 2. GET: Obtener uno por ID (READ) -> Ejemplo URL: /api/usuarios/5
+    // 2. GET: Obtener uno por ID
     @GET
     @Path("/{id}")
     @Produces(MediaType.APPLICATION_JSON)
@@ -34,7 +34,7 @@ public class UsuarioController {
         }
     }
 
-    // 3. POST: Crear nuevo (CREATE)
+    // 3. POST: Crear nuevo (CORREGIDO PARA EL NUEVO DAO)
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
@@ -49,36 +49,29 @@ public class UsuarioController {
         }
 
         // --- VALIDACIÓN 2: Fortaleza de Contraseña ---
-        // Exigimos mínimo 5 caracteres para que no pongan "123"
         if (nuevoUsuario.getContrasena() == null || nuevoUsuario.getContrasena().length() < 5) {
             return Response.status(400)
                     .entity("{\"mensaje\": \"La contraseña es muy débil. Debe tener al menos 5 caracteres.\"}").build();
         }
 
-        /* --- VALIDACIÓN 3: Formato de Correo (Opcional) ---
-           Nota: Como tu modelo 'Usuario' no tiene el campo email directo (está en Cliente/Entrenador),
-           esta validación la harías normalmente en ClienteController.
-           Pero si decides agregar email a Usuario, usarías esto:
+        // --- CAMBIO PARA ARREGLAR EL ERROR ---
+        // Generamos un código temporal aunque sea un registro administrativo,
+        // para cumplir con el requisito del DAO.
+        String codigoGenerado = String.format("%06d", new Random().nextInt(999999));
 
-           String emailRegex = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$";
-           if (!Pattern.matches(emailRegex, nuevoUsuario.getEmail())) {
-               return Response.status(400).entity("{\"mensaje\": \"Correo inválido\"}").build();
-           }
-        */
-
-        // Si pasa los filtros, el DAO se encarga de encriptar y guardar
-        boolean exito = dao.crear(nuevoUsuario);
+        // Ahora pasamos AMBOS parámetros: el usuario Y el código
+        boolean exito = dao.registrarNuevoUsuario(nuevoUsuario, codigoGenerado);
 
         if (exito) {
             return Response.status(Response.Status.CREATED)
                     .entity("{\"mensaje\": \"Usuario creado con éxito\"}").build();
         } else {
             return Response.status(500)
-                    .entity("{\"mensaje\": \"Error al crear usuario. Posiblemente el nombre ya existe.\"}").build();
+                    .entity("{\"mensaje\": \"Error al crear usuario. Posiblemente el nombre o correo ya existen.\"}").build();
         }
     }
 
-    // 4. PUT: Actualizar (UPDATE)
+    // 4. PUT: Actualizar
     @PUT
     @Consumes(MediaType.APPLICATION_JSON)
     public Response actualizarUsuario(Usuario usuarioEditado) {
@@ -90,7 +83,7 @@ public class UsuarioController {
         }
     }
 
-    // 5. DELETE: Borrar (DELETE) -> Ejemplo URL: /api/usuarios/5
+    // 5. DELETE: Borrar
     @DELETE
     @Path("/{id}")
     public Response eliminarUsuario(@PathParam("id") int id) {

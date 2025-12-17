@@ -9,11 +9,18 @@ public class Usuario implements Serializable {
     private String usuario;
     private String contrasena;
     private Timestamp fechaCreacion;
+    private boolean activo;
+    private String email;
 
-    // CONSTRUCTOR VACÍO (¡Obligatorio!)
+    // --- CAMPOS PARA EL FORMULARIO COMPLETO ---
+    private String nombre;          // <--- Nombre (Ej: Alan)
+    private String apellido;        // <--- NUEVO CAMPO (Ej: Olivo)
+    private String telefono;
+    private String fechaNacimiento;
+
     public Usuario() {}
 
-    // GETTERS Y SETTERS (¡Obligatorios!)
+    // Getters y Setters
     public int getIdUsuario() { return idUsuario; }
     public void setIdUsuario(int idUsuario) { this.idUsuario = idUsuario; }
 
@@ -28,4 +35,23 @@ public class Usuario implements Serializable {
 
     public Timestamp getFechaCreacion() { return fechaCreacion; }
     public void setFechaCreacion(Timestamp fechaCreacion) { this.fechaCreacion = fechaCreacion; }
+
+    public boolean isActivo() { return activo; }
+    public void setActivo(boolean activo) { this.activo = activo; }
+
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
+
+    // --- NUEVOS GETTERS Y SETTERS ---
+    public String getNombre() { return nombre; }
+    public void setNombre(String nombre) { this.nombre = nombre; }
+
+    public String getApellido() { return apellido; } // <--- Getter Apellido
+    public void setApellido(String apellido) { this.apellido = apellido; } // <--- Setter Apellido
+
+    public String getTelefono() { return telefono; }
+    public void setTelefono(String telefono) { this.telefono = telefono; }
+
+    public String getFechaNacimiento() { return fechaNacimiento; }
+    public void setFechaNacimiento(String fechaNacimiento) { this.fechaNacimiento = fechaNacimiento; }
 }
