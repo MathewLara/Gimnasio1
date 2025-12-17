@@ -111,45 +111,53 @@ public class UsuarioDAO {
             return false;
         }
     }
-    public Usuario login(String user, String pass) {
-        System.out.println("--- INTENTO DE LOGIN ---");
-        System.out.println("1. Buscando usuario: " + user);
+    public Usuario login(String userOrEmail, String pass) {
+        // CAMBIÉ EL TEXTO PARA QUE VEAS SI SE ACTUALIZÓ:
+        System.out.println(">>> DEBUG V2: INICIO LOGIN <<<");
+        System.out.println("1. Buscando: '" + userOrEmail + "' con contraseña: '" + pass + "'");
 
-        String sql = "SELECT * FROM usuarios WHERE usuario = ?";
+        // TRUCO: Usamos LOWER() para ignorar mayúsculas/minúsculas
+        String sql = "SELECT u.*, c.email as email_cliente, e.email as email_entrenador " +
+                "FROM usuarios u " +
+                "LEFT JOIN clientes c ON u.id_usuario = c.id_usuario " +
+                "LEFT JOIN entrenadores e ON u.id_usuario = e.id_usuario " +
+                "WHERE LOWER(u.usuario) = LOWER(?) OR LOWER(c.email) = LOWER(?) OR LOWER(e.email) = LOWER(?)";
+
         Usuario u = null;
 
         try (java.sql.Connection conn = com.mathew.gimnasio.configuracion.ConexionDB.getConnection();
              java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
 
-            ps.setString(1, user);
+            ps.setString(1, userOrEmail);
+            ps.setString(2, userOrEmail);
+            ps.setString(3, userOrEmail);
+
             java.sql.ResultSet rs = ps.executeQuery();
 
             if (rs.next()) {
-                System.out.println("2. Usuario encontrado en BD.");
+                System.out.println("2. ¡ENCONTRADO EN BD! ID: " + rs.getInt("id_usuario"));
                 String hashGuardado = rs.getString("contrasena");
                 System.out.println("3. Hash en BD: " + hashGuardado);
 
-                // INTENTO DE VERIFICACIÓN
-                try {
-                    boolean coincide = com.mathew.gimnasio.util.SecurityUtil.verificar(pass, hashGuardado);
-                    System.out.println("4. Resultado de verificación: " + coincide);
+                boolean coincide = com.mathew.gimnasio.util.SecurityUtil.verificar(pass, hashGuardado);
+                System.out.println("4. ¿Coincide contraseña? " + coincide);
 
-                    if (coincide) {
-                        u = new Usuario();
-                        u.setIdUsuario(rs.getInt("id_usuario"));
-                        u.setIdRol(rs.getInt("id_rol"));
-                        u.setUsuario(rs.getString("usuario"));
-                        u.setContrasena(null);
-                    }
-                } catch (Throwable errorLibreria) {
-                    System.err.println("!!! ERROR GRAVE: NO SE ENCUENTRA JBCRYPT !!!");
-                    errorLibreria.printStackTrace();
+                if (coincide) {
+                    u = new Usuario();
+                    u.setIdUsuario(rs.getInt("id_usuario"));
+                    u.setIdRol(rs.getInt("id_rol"));
+                    u.setUsuario(rs.getString("usuario"));
+                    u.setContrasena(null);
+                    System.out.println("5. >>> LOGIN EXITOSO <<<");
+                } else {
+                    System.out.println("5. X LOGIN FALLIDO: Contraseña incorrecta X");
                 }
             } else {
-                System.out.println("2. Usuario NO encontrado en BD.");
+                System.out.println("2. X USUARIO NO ENCONTRADO EN BDD X");
+                System.out.println("   (Revisa que el correo '" + userOrEmail + "' exista en la tabla clientes o entrenadores)");
             }
         } catch (Exception e) {
-            System.out.println("Error de Base de Datos:");
+            System.out.println("!!! ERROR DE BASE DE DATOS !!!");
             e.printStackTrace();
         }
         return u;
@@ -193,5 +201,40 @@ public class UsuarioDAO {
             e.printStackTrace();
         }
         return email;
+    }
+    public boolean validarCodigo2FA(int idUsuario, String codigoIngresado) {
+        boolean esValido = false;
+
+        // VALIDACIÓN ROBUSTA EN BASE DE DATOS
+        String sqlSelect = "SELECT id_codigo FROM codigos_verificacion " +
+                "WHERE id_usuario = ? " +
+                "AND codigo = ? " +
+                "AND usado = FALSE " +
+                "AND fecha_expiracion > CURRENT_TIMESTAMP";
+
+        String sqlUpdate = "UPDATE codigos_verificacion SET usado = TRUE WHERE id_codigo = ?";
+
+        try (java.sql.Connection conn = com.mathew.gimnasio.configuracion.ConexionDB.getConnection();
+             java.sql.PreparedStatement psSelect = conn.prepareStatement(sqlSelect)) {
+
+            psSelect.setInt(1, idUsuario);
+            psSelect.setString(2, codigoIngresado);
+
+            java.sql.ResultSet rs = psSelect.executeQuery();
+
+            if (rs.next()) {
+                // Si entra aquí, el código es válido.
+                // AHORA: Lo "quemamos" (marcamos como usado) para que no sirva una segunda vez.
+                int idCodigo = rs.getInt("id_codigo");
+                try (java.sql.PreparedStatement psUpdate = conn.prepareStatement(sqlUpdate)) {
+                    psUpdate.setInt(1, idCodigo);
+                    psUpdate.executeUpdate();
+                }
+                esValido = true;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return esValido;
     }
 }
