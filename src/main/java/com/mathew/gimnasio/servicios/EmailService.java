@@ -6,9 +6,8 @@ import java.util.Properties;
 
 public class EmailService {
 
-    // CAMBIA ESTOS DATOS POR LOS TUYOS
     private final String miCorreo = "mathewlara2006@gmail.com";
-    private final String miPassword = "ozmr racb urap vtdv"; // ¡No uses tu clave normal!
+    private final String miPassword = "ozmr racb urap vtdv"; //
 
     public void enviarCodigo(String destinatario, String codigo) {
         // Configuración del servidor de Google

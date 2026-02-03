@@ -10,6 +10,11 @@ public class ResumenClienteDTO implements Serializable {
     public String nombreRutina;
     public String entrenador;
     public List<EjercicioSimple> ejercicios;
+    public boolean rutinaTerminadaHoy;
+    public String nombrePlan;
+    public Double precioPlan;
+    public String fechaVencimiento;
+    public String estadoMembresia;
 
     public static class AsistenciaSimple implements Serializable {
         public String fecha;
