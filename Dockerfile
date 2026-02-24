@@ -5,8 +5,8 @@ RUN mvn clean package -DskipTests
 
 # Paso 2: Usar WildFly para ejecutar la aplicación
 FROM quay.io/wildfly/wildfly:latest
-# Copiamos el archivo .war generado por Maven a la carpeta de despliegue de WildFly
-COPY --from=build /target/*.war /opt/jboss/wildfly/standalone/deployments/
+# Copiamos el archivo .war generado por Maven y lo RENOMBRAMOS a Gimnasio.war
+COPY --from=build target/*.war /opt/jboss/wildfly/standalone/deployments/Gimnasio.war
 
 # Exponemos el puerto 8080 que es el que usa WildFly por defecto
 EXPOSE 8080
