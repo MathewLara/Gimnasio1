@@ -8,38 +8,54 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 
+/**
+ * CLASE DAO DEL ENTRENADOR
+ * Esta clase es el motor que permite a los entrenadores gestionar el gimnasio.
+ * Contiene la lógica para consultar estadísticas, ver el progreso de los alumnos
+ * y realizar acciones como crear, editar o "borrar" rutinas.
+ */
 public class EntrenadorDAO {
 
+    /**
+     * OBTENER TABLERO PRINCIPAL
+     * Reúne toda la información que el entrenador ve al entrar a su panel.
+     *
+     * @param idUsuario ID de la cuenta del profesor logueado.
+     */
     public EntrenadorDashboardDTO obtenerDashboard(int idUsuario) {
         EntrenadorDashboardDTO dto = new EntrenadorDashboardDTO();
 
         try (Connection conn = ConexionDB.getConnection()) {
 
-            // 1. OBTENER ID ENTRENADOR
+            // 1. IDENTIFICAR AL ENTRENADOR
+            // Buscamos el nombre y la especialidad del profesor usando su ID de usuario.
             String sqlEnt = "SELECT id_entrenador, nombre || ' ' || apellido as n, especialidad FROM entrenadores WHERE id_usuario = ?";
             PreparedStatement ps = conn.prepareStatement(sqlEnt);
             ps.setInt(1, idUsuario);
             ResultSet rs = ps.executeQuery();
 
             int idEntrenador = 0;
-            if(rs.next()) {
+            if (rs.next()) {
                 idEntrenador = rs.getInt("id_entrenador");
                 dto.nombre = rs.getString("n");
                 dto.especialidad = rs.getString("especialidad");
             }
 
-            // 2. CONTEOS
+            // PASO 2. CONTADORES DE ESTADÍSTICAS
+            // Contamos cuántas rutinas tiene activas actualmente.
             ps = conn.prepareStatement("SELECT COUNT(*) FROM rutinas WHERE id_entrenador = ? AND activa = TRUE");
             ps.setInt(1, idEntrenador);
             rs = ps.executeQuery();
-            if(rs.next()) dto.rutinasCreadas = rs.getInt(1);
+            if (rs.next()) dto.rutinasCreadas = rs.getInt(1);
 
+            // Contamos cuántos alumnos diferentes tiene asignados.
             ps = conn.prepareStatement("SELECT COUNT(DISTINCT id_cliente) FROM rutinas WHERE id_entrenador = ? AND activa = TRUE");
             ps.setInt(1, idEntrenador);
             rs = ps.executeQuery();
-            if(rs.next()) dto.totalAlumnos = rs.getInt(1);
+            if (rs.next()) dto.totalAlumnos = rs.getInt(1);
 
-            // 3. LISTA DE ALUMNOS
+            // 3. LISTA DE ALUMNOS Y SU PROGRESO DIARIO
+            // Traemos a los alumnos y revisamos si ya presionaron el botón "Terminar" hoy.
             dto.listaAlumnos = new ArrayList<>();
             String sqlAlumnos = "SELECT DISTINCT c.id_cliente, c.nombre || ' ' || c.apellido as n, " +
                     "COALESCE(m.nombre, 'Sin Plan') as plan, " +
@@ -54,7 +70,7 @@ public class EntrenadorDAO {
             ps = conn.prepareStatement(sqlAlumnos);
             ps.setInt(1, idEntrenador);
             rs = ps.executeQuery();
-            while(rs.next()) {
+            while (rs.next()) {
                 boolean yaTermino = "SI".equals(rs.getString("termino"));
                 dto.listaAlumnos.add(new EntrenadorDashboardDTO.AlumnoResumen(
                         rs.getInt("id_cliente"),
@@ -65,13 +81,13 @@ public class EntrenadorDAO {
                 ));
             }
 
-            // 4. LISTA DE RUTINAS (BIBLIOTECA) - AHORA CON ID
+            // 4. BIBLIOTECA DE RUTINAS
+            // Listamos todas las rutinas (incluso las inactivas) para que el profesor pueda administrarlas.
             dto.listaRutinas = new ArrayList<>();
-            // Quitamos el "AND activa = TRUE" para traer todo
             ps = conn.prepareStatement("SELECT id_rutina, nombre_rutina, activa, id_cliente FROM rutinas WHERE id_entrenador = ? ORDER BY id_rutina DESC");
             ps.setInt(1, idEntrenador);
             rs = ps.executeQuery();
-            while(rs.next()) {
+            while (rs.next()) {
                 EntrenadorDashboardDTO.RutinaItem item = new EntrenadorDashboardDTO.RutinaItem(
                         rs.getInt("id_rutina"),
                         rs.getString("nombre_rutina"),
@@ -79,26 +95,33 @@ public class EntrenadorDAO {
                         rs.getInt("id_cliente")
                 );
 
-                // Cargar IDs de ejercicios para poder editar luego
+                // También cargamos qué ejercicios tiene cada rutina para poder editarlos después.
                 PreparedStatement ps2 = conn.prepareStatement("SELECT id_ejercicio FROM detalle_rutinas WHERE id_rutina = ?");
                 ps2.setInt(1, item.id);
                 ResultSet rs2 = ps2.executeQuery();
-                while(rs2.next()) item.idsEjercicios.add(rs2.getInt(1));
+                while (rs2.next()) item.idsEjercicios.add(rs2.getInt(1));
 
                 dto.listaRutinas.add(item);
             }
 
-        } catch (Exception e) { e.printStackTrace(); }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         return dto;
     }
 
-    // CREAR RUTINA (Con limpieza de historial diario)
+    /**
+     * CREAR NUEVA RUTINA
+     * Registra una rutina y sus ejercicios. Usa "transacciones" para que si algo falla,
+     * no se guarde nada a medias.
+     */
     public boolean crearRutina(int idUsuarioEntrenador, NuevaRutinaDTO datos) {
         Connection conn = null;
         try {
             conn = ConexionDB.getConnection();
-            conn.setAutoCommit(false);
+            conn.setAutoCommit(false); // Iniciamos modo "todo o nada"
 
+            // 1. Buscamos el ID interno del entrenador.
             int idEntrenador = 0;
             PreparedStatement ps = conn.prepareStatement("SELECT id_entrenador FROM entrenadores WHERE id_usuario = ?");
             ps.setInt(1, idUsuarioEntrenador);
@@ -106,13 +129,13 @@ public class EntrenadorDAO {
             if (rs.next()) idEntrenador = rs.getInt("id_entrenador");
             else return false;
 
-            // RESET DIARIO: Si asigno rutina, borro el "Completado" de hoy
+            // 2. Limpieza: Si le asignamos una rutina nueva, borramos el "completado" de hoy.
             String sqlReset = "DELETE FROM historial_entrenamientos WHERE id_cliente = ? AND fecha = CURRENT_DATE";
             PreparedStatement psReset = conn.prepareStatement(sqlReset);
             psReset.setInt(1, datos.idCliente);
             psReset.executeUpdate();
 
-            // INSERTAR RUTINA
+            // 3. Guardamos la cabecera de la rutina.
             String sqlRutina = "INSERT INTO rutinas (id_cliente, id_entrenador, nombre_rutina, fecha_creacion, activa) VALUES (?, ?, ?, CURRENT_DATE, TRUE) RETURNING id_rutina";
             ps = conn.prepareStatement(sqlRutina);
             ps.setInt(1, datos.idCliente);
@@ -123,29 +146,40 @@ public class EntrenadorDAO {
             int idRutina = 0;
             if (rs.next()) idRutina = rs.getInt(1);
 
+            // 4. Guardamos el listado de ejercicios vinculados.
             String sqlDetalle = "INSERT INTO detalle_rutinas (id_rutina, id_ejercicio, series, repeticiones) VALUES (?, ?, '4 Series', '12 Reps')";
             ps = conn.prepareStatement(sqlDetalle);
 
             for (Integer idEjercicio : datos.idsEjercicios) {
                 ps.setInt(1, idRutina);
                 ps.setInt(2, idEjercicio);
-                ps.addBatch();
+                ps.addBatch(); // Los preparamos en grupo
             }
-            ps.executeBatch();
+            ps.executeBatch(); // Los guardamos todos de golpe
 
-            conn.commit();
+            conn.commit(); // Confirmamos que todo se guardó bien
             return true;
 
         } catch (Exception e) {
             e.printStackTrace();
-            try { if (conn != null) conn.rollback(); } catch (Exception ex) {}
+            try {
+                if (conn != null) conn.rollback();
+            } catch (Exception ex) {
+            } // Si falló algo, cancelamos todo
             return false;
         } finally {
-            try { if (conn != null) conn.close(); } catch (Exception ex) {}
+            try {
+                if (conn != null) conn.close();
+            } catch (Exception ex) {
+            }
         }
     }
 
-    // --- NUEVO MÉTODO: DESACTIVAR (BORRADO LÓGICO) ---
+    /**
+     * DESACTIVAR RUTINA (BORRADO LÓGICO)
+     * No borramos la rutina de la base de datos para no perder el historial;
+     * simplemente la marcamos como "inactiva".
+     */
     public boolean desactivarRutina(int idRutina) {
         try (Connection conn = ConexionDB.getConnection()) {
             // No borramos (DELETE), solo actualizamos el estado
@@ -159,7 +193,7 @@ public class EntrenadorDAO {
         }
     }
 
-    // --- MÉTODO AGENDA (Del paso anterior) ---
+    // --- MeTODO AGENDA (Del paso anterior) ---
     public java.util.List<EntrenadorDashboardDTO.AlumnoResumen> obtenerAgendaHoy(int idUsuarioEntrenador) {
         java.util.List<EntrenadorDashboardDTO.AlumnoResumen> agenda = new ArrayList<>();
         try (Connection conn = ConexionDB.getConnection()) {
@@ -174,23 +208,29 @@ public class EntrenadorDAO {
             PreparedStatement ps = conn.prepareStatement(sql);
             ps.setInt(1, idUsuarioEntrenador);
             ResultSet rs = ps.executeQuery();
-            while(rs.next()) {
+            while (rs.next()) {
                 boolean termino = "SI".equals(rs.getString("completo"));
                 agenda.add(new EntrenadorDashboardDTO.AlumnoResumen(
                         rs.getInt("id_cliente"), rs.getString("n"), "Hoy", rs.getString("nombre_rutina"), termino
                 ));
             }
-        } catch (Exception e) { e.printStackTrace(); }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         return agenda;
     }
-    // --- MÉTODO ACTUALIZAR (EDITAR) ---
+
+    /**
+     * ACTUALIZAR O EDITAR RUTINA
+     * Modifica el nombre, el cliente y reemplaza todos los ejercicios antiguos por los nuevos.
+     */
     public boolean actualizarRutina(int idRutina, NuevaRutinaDTO datos) {
         Connection conn = null;
         try {
             conn = ConexionDB.getConnection();
             conn.setAutoCommit(false);
 
-            // 1. Actualizar nombre y cliente
+            // 1. Cambiamos los datos principales.
             String sqlUpdate = "UPDATE rutinas SET nombre_rutina = ?, id_cliente = ? WHERE id_rutina = ?";
             PreparedStatement ps = conn.prepareStatement(sqlUpdate);
             ps.setString(1, datos.nombreRutina);
@@ -198,12 +238,12 @@ public class EntrenadorDAO {
             ps.setInt(3, idRutina);
             ps.executeUpdate();
 
-            // 2. Borrar ejercicios viejos
+            // 2. Quitamos los ejercicios anteriores.
             ps = conn.prepareStatement("DELETE FROM detalle_rutinas WHERE id_rutina = ?");
             ps.setInt(1, idRutina);
             ps.executeUpdate();
 
-            // 3. Insertar ejercicios nuevos
+            // 3. Insertamos la nueva lista de ejercicios.
             String sqlDetalle = "INSERT INTO detalle_rutinas (id_rutina, id_ejercicio, series, repeticiones) VALUES (?, ?, '4 Series', '12 Reps')";
             ps = conn.prepareStatement(sqlDetalle);
             for (Integer idEjercicio : datos.idsEjercicios) {
@@ -213,7 +253,7 @@ public class EntrenadorDAO {
             }
             ps.executeBatch();
 
-            // 4. Resetear historial de hoy (por si cambiaron la rutina)
+            // 4. Si editamos la rutina, reseteamos el historial de hoy para que el alumno pueda marcarla otra vez.
             ps = conn.prepareStatement("DELETE FROM historial_entrenamientos WHERE id_cliente = ? AND fecha = CURRENT_DATE");
             ps.setInt(1, datos.idCliente);
             ps.executeUpdate();
@@ -222,18 +262,32 @@ public class EntrenadorDAO {
             return true;
         } catch (Exception e) {
             e.printStackTrace();
-            try { if(conn!=null) conn.rollback(); } catch(Exception ex){}
+            try {
+                if (conn != null) conn.rollback();
+            } catch (Exception ex) {
+            }
             return false;
-        } finally { try { if(conn!=null) conn.close(); } catch(Exception ex){} }
+        } finally {
+            try {
+                if (conn != null) conn.close();
+            } catch (Exception ex) {
+            }
+        }
     }
 
-    // --- MÉTODO REACTIVAR (SACAR DE LA BASURA) ---
+    /**
+     * REACTIVAR RUTINA
+     * Recupera una rutina que había sido desactivada anteriormente.
+     */
     public boolean reactivarRutina(int idRutina) {
         try (Connection conn = ConexionDB.getConnection()) {
             String sql = "UPDATE rutinas SET activa = TRUE WHERE id_rutina = ?";
             PreparedStatement ps = conn.prepareStatement(sql);
             ps.setInt(1, idRutina);
             return ps.executeUpdate() > 0;
-        } catch (Exception e) { e.printStackTrace(); return false; }
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 }

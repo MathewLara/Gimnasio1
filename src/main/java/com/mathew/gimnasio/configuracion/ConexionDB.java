@@ -4,27 +4,36 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 
+/**
+ * CONEXIÓN A LA BASE DE DATOS
+ * Esta clase es el puente central entre nuestra aplicación Java y PostgreSQL.
+ * Sigue el patrón Singleton (o de acceso estático) para proporcionar conexiones
+ * cada vez que un DAO necesita guardar o consultar información.
+ */
 public class ConexionDB {
 
-    // 1. URL para PostgreSQL (El puerto estándar es 5432)
-    // "gimnasio" es el nombre de tu base de datos (según veo en tu panel derecho)
-    private static final String URL = "jdbc:postgresql://localhost:5432/gimnasio";
-
-    // 2. Tus credenciales de PgAdmin
+    // Credenciales y ruta de nuestra base de datos PostgreSQL
+    private static final String URL = "jdbc:postgresql://localhost:5432/postgres";
     private static final String USER = "postgres";
-    private static final String PASS = "161825"; // <--- ¡CAMBIA ESTO!
+    private static final String PASS = "161825";
 
-    static {
+    /**
+     * OBTENER CONEXIÓN
+     * Se encarga de cargar el driver de la base de datos y establecer la conexión activa.
+     * @return Un objeto Connection listo para ejecutar consultas SQL, o null si falla.
+     */
+    public static Connection getConnection() {
         try {
-            // Cargamos el driver de PostgreSQL
+            // Registramos el driver de PostgreSQL para que Java sepa cómo comunicarse
             Class.forName("org.postgresql.Driver");
-        } catch (ClassNotFoundException e) {
-            System.err.println("Error: No se encontró el Driver de PostgreSQL.");
-            e.printStackTrace();
-        }
-    }
 
-    public static Connection getConnection() throws SQLException {
-        return DriverManager.getConnection(URL, USER, PASS);
+            // Intentamos abrir la puerta hacia la base de datos usando nuestras credenciales
+            return DriverManager.getConnection(URL, USER, PASS);
+
+        } catch (ClassNotFoundException | SQLException e) {
+            // Si la base de datos está apagada o la contraseña es incorrecta, mostramos el error
+            System.out.println("Error de conexión: " + e.getMessage());
+            return null;
+        }
     }
 }

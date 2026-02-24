@@ -12,15 +12,6 @@ public class CargadorFotosDB {
         String rutaCarpeta = "C:/Imagenes Gimnasio/";
         File carpeta = new File(rutaCarpeta);
 
-        System.out.println("🚀 INICIANDO ESCANEO INTELIGENTE EN: " + rutaCarpeta);
-
-        // Verificar si la carpeta existe
-        if (!carpeta.exists() || !carpeta.isDirectory()) {
-            System.out.println("❌ ERROR CRÍTICO: No encuentro la carpeta 'C:/Imagenes Gimnasio'.");
-            System.out.println("👉 Por favor mueve tu carpeta de Descargas al Disco Local C.");
-            return;
-        }
-
         try (Connection conn = ConexionDB.getConnection()) {
             // Buscamos productos del 1 al 6
             for (int id = 1; id <= 6; id++) {

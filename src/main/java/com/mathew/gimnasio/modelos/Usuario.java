@@ -16,6 +16,7 @@ public class Usuario implements Serializable {
     private String nombre;          // <--- Nombre (Ej: Alan)
     private String apellido;        // <--- NUEVO CAMPO (Ej: Olivo)
     private String telefono;
+    private String cedula;
     private String fechaNacimiento;
 
     public Usuario() {}
@@ -51,6 +52,9 @@ public class Usuario implements Serializable {
 
     public String getTelefono() { return telefono; }
     public void setTelefono(String telefono) { this.telefono = telefono; }
+
+    public String getCedula() { return cedula; }
+    public void setCedula(String cedula) { this.cedula = cedula; }
 
     public String getFechaNacimiento() { return fechaNacimiento; }
     public void setFechaNacimiento(String fechaNacimiento) { this.fechaNacimiento = fechaNacimiento; }
