@@ -28,10 +28,10 @@ public class EmailService {
 
         // 1. Configuración de las propiedades del servidor SMTP de Google
         Properties props = new Properties();
-        props.put("mail.smtp.auth", "true"); // Le decimos que vamos a iniciar sesión (requiere autenticación)
-        props.put("mail.smtp.starttls.enable", "true"); // Activamos TLS para que la conexión viaje encriptada y segura
-        props.put("mail.smtp.host", "smtp.gmail.com"); // La dirección del servidor de salida de correos de Google
-        props.put("mail.smtp.port", "587"); // El puerto estándar que usa Gmail para conexiones TLS
+        props.put("mail.smtp.auth", "true");
+        props.put("mail.smtp.ssl.enable", "true"); // Cambiamos starttls por ssl.enable
+        props.put("mail.smtp.host", "smtp.gmail.com");
+        props.put("mail.smtp.port", "465"); // Cambiamos el puerto al 465
 
         // 2. Sesión de seguridad y autenticación
         // Creamos una sesión en el servidor de correo usando nuestras credenciales
