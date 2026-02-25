@@ -316,6 +316,45 @@ public class UsuarioDAO {
             return ps.executeUpdate() > 0;
         } catch (Exception e) { return false; }
     }
+    // 3. AGREGAR NUEVO PERSONAL / USUARIO
+    public boolean agregarPersonalAdmin(Usuario u) {
+        String sql = "INSERT INTO usuarios (id_rol, usuario, contrasena, activo, nombre, apellido) VALUES (?, ?, ?, true, ?, ?)";
+        try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, u.getIdRol());
+            ps.setString(2, u.getUsuario());
+            ps.setString(3, SecurityUtil.encriptar(u.getContrasena()));
+            ps.setString(4, u.getNombre());
+            ps.setString(5, u.getApellido());
+            return ps.executeUpdate() > 0;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    // 4. EDITAR USUARIO (Y su contraseña si la escribe)
+    public boolean editarPersonalAdmin(Usuario u) {
+        boolean cambiaPass = (u.getContrasena() != null && !u.getContrasena().trim().isEmpty());
+        String sql = cambiaPass
+                ? "UPDATE usuarios SET id_rol=?, usuario=?, contrasena=?, nombre=?, apellido=? WHERE id_usuario=?"
+                : "UPDATE usuarios SET id_rol=?, usuario=?, nombre=?, apellido=? WHERE id_usuario=?";
+
+        try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, u.getIdRol());
+            ps.setString(2, u.getUsuario());
+            if (cambiaPass) {
+                ps.setString(3, SecurityUtil.encriptar(u.getContrasena()));
+                ps.setString(4, u.getNombre());
+                ps.setString(5, u.getApellido());
+                ps.setInt(6, u.getIdUsuario());
+            } else {
+                ps.setString(3, u.getNombre());
+                ps.setString(4, u.getApellido());
+                ps.setInt(5, u.getIdUsuario());
+            }
+            return ps.executeUpdate() > 0;
+        } catch (Exception e) { return false; }
+    }
 
     // ==========================================
     // 5. MÉTODOS AUXILIARES Y STUBS
