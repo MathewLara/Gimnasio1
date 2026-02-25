@@ -274,6 +274,50 @@ public class UsuarioDAO {
     }
 
     // ==========================================
+    // GESTIÓN DE USUARIOS (PANEL ADMIN)
+    // ==========================================
+
+    // 1. Listar todos los usuarios con sus roles
+    public String obtenerUsuariosParaAdminJSON() {
+        StringBuilder json = new StringBuilder("[");
+        // Hacemos un JOIN para traer el nombre del rol en lugar de solo el número
+        String sql = "SELECT u.id_usuario, u.usuario, u.nombre, u.apellido, u.activo, r.nombre_rol " +
+                "FROM usuarios u INNER JOIN roles r ON u.id_rol = r.id_rol " +
+                "ORDER BY u.id_rol ASC, u.id_usuario DESC";
+
+        try (Connection conn = ConexionDB.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            boolean first = true;
+            while (rs.next()) {
+                if (!first) json.append(",");
+                json.append("{")
+                        .append("\"id\":").append(rs.getInt("id_usuario")).append(",")
+                        .append("\"usuario\":\"").append(rs.getString("usuario")).append("\",")
+                        .append("\"nombre\":\"").append(rs.getString("nombre") != null ? rs.getString("nombre") : "").append("\",")
+                        .append("\"apellido\":\"").append(rs.getString("apellido") != null ? rs.getString("apellido") : "").append("\",")
+                        .append("\"rol\":\"").append(rs.getString("nombre_rol")).append("\",")
+                        .append("\"activo\":").append(rs.getBoolean("activo"))
+                        .append("}");
+                first = false;
+            }
+        } catch (Exception e) { e.printStackTrace(); }
+        json.append("]");
+        return json.toString();
+    }
+
+    // 2. Eliminado Lógico (Cambiar estado activo/inactivo)
+    public boolean cambiarEstadoUsuario(int idUsuario, boolean nuevoEstado) {
+        String sql = "UPDATE usuarios SET activo = ? WHERE id_usuario = ?";
+        try (Connection conn = ConexionDB.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setBoolean(1, nuevoEstado);
+            ps.setInt(2, idUsuario);
+            return ps.executeUpdate() > 0;
+        } catch (Exception e) { return false; }
+    }
+
+    // ==========================================
     // 5. MÉTODOS AUXILIARES Y STUBS
     // ==========================================
 

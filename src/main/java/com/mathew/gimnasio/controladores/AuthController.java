@@ -195,6 +195,27 @@ public class AuthController {
         String jsonReal = dao.getAdminStatsJSON();
         return Response.ok(jsonReal).build();
     }
+    /**
+     * ENDPOINT: LISTAR TODOS LOS USUARIOS
+     */
+    @GET
+    @Path("/admin/usuarios")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response getUsuariosAdmin() {
+        return Response.ok(dao.obtenerUsuariosParaAdminJSON()).build();
+    }
+
+    /**
+     * ENDPOINT: ELIMINADO LÓGICO / ACTIVACIÓN
+     */
+    @PUT
+    @Path("/admin/usuarios/{id}/estado")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response cambiarEstado(@PathParam("id") int id, @QueryParam("activo") boolean activo) {
+        boolean exito = dao.cambiarEstadoUsuario(id, activo);
+        if (exito) return Response.ok("{\"mensaje\": \"Estado actualizado correctamente\"}").build();
+        return Response.status(400).entity("{\"mensaje\": \"Error al actualizar\"}").build();
+    }
 
     /**
      * FORMATEADOR DE ERRORES
