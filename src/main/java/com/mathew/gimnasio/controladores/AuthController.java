@@ -183,6 +183,18 @@ public class AuthController {
         }
         return Response.status(401).entity("{\"mensaje\": \"Credenciales incorrectas\"}").build();
     }
+    /**
+     * ENDPOINT PARA EL DASHBOARD DEL ADMINISTRADOR
+     * Devuelve las métricas reales de la base de datos.
+     */
+    @GET
+    @Path("/admin/dashboard")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response getAdminDashboard() {
+        // Llamamos a la función que acabamos de crear en el DAO
+        String jsonReal = dao.getAdminStatsJSON();
+        return Response.ok(jsonReal).build();
+    }
 
     /**
      * FORMATEADOR DE ERRORES

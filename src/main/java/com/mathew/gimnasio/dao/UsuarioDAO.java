@@ -244,6 +244,34 @@ public class UsuarioDAO {
         } catch (Exception e) { e.printStackTrace(); }
         return u;
     }
+    // ==========================================
+    // MÉTODO REAL PARA EL DASHBOARD DE ADMIN
+    // ==========================================
+    public String getAdminStatsJSON() {
+        int totalClientes = 0;
+        int totalEntrenadores = 0;
+        double ingresos = 0.0;
+
+        try (Connection conn = ConexionDB.getConnection()) {
+            // 1. Contar clientes reales
+            ResultSet rs1 = conn.prepareStatement("SELECT COUNT(*) FROM clientes").executeQuery();
+            if(rs1.next()) totalClientes = rs1.getInt(1);
+
+            // 2. Contar entrenadores reales
+            ResultSet rs2 = conn.prepareStatement("SELECT COUNT(*) FROM entrenadores").executeQuery();
+            if(rs2.next()) totalEntrenadores = rs2.getInt(1);
+
+            // 3. Sumar el dinero real de la tabla pagos
+            ResultSet rs3 = conn.prepareStatement("SELECT COALESCE(SUM(monto_pagado), 0) FROM pagos").executeQuery();
+            if(rs3.next()) ingresos = rs3.getDouble(1);
+
+        } catch(Exception e) {
+            e.printStackTrace();
+        }
+
+        // Construimos un JSON manual rápido para no crear más archivos
+        return "{\"totalClientes\": " + totalClientes + ", \"totalEntrenadores\": " + totalEntrenadores + ", \"ingresos\": " + ingresos + "}";
+    }
 
     // ==========================================
     // 5. MÉTODOS AUXILIARES Y STUBS
