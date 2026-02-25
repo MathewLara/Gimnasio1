@@ -184,6 +184,34 @@ public class AuthController {
         return Response.status(401).entity("{\"mensaje\": \"Credenciales incorrectas\"}").build();
     }
     /**
+     * ENDPOINT: AGREGAR USUARIO DESDE ADMIN
+     */
+    @POST
+    @Path("/admin/usuarios")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response crearUsuarioAdmin(Usuario u) {
+        if(dao.agregarPersonalAdmin(u)) {
+            return Response.ok("{\"mensaje\": \"Creado exitosamente\"}").build();
+        }
+        return Response.status(400).entity("{\"mensaje\": \"Error al crear.\"}").build();
+    }
+
+    /**
+     * ENDPOINT: EDITAR USUARIO DESDE ADMIN
+     */
+    @PUT
+    @Path("/admin/usuarios/{id}")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response editarUsuarioAdmin(@PathParam("id") int id, Usuario u) {
+        u.setIdUsuario(id);
+        if(dao.editarPersonalAdmin(u)) {
+            return Response.ok("{\"mensaje\": \"Actualizado exitosamente\"}").build();
+        }
+        return Response.status(400).entity("{\"mensaje\": \"Error al actualizar\"}").build();
+    }
+   /**
      * ENDPOINT PARA EL DASHBOARD DEL ADMINISTRADOR
      * Devuelve las métricas reales de la base de datos.
      */
