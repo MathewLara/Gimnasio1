@@ -1,10 +1,13 @@
 package com.mathew.gimnasio.controladores;
 
+import com.mathew.gimnasio.dao.LogAccesoDAO;
 import com.mathew.gimnasio.dao.UsuarioDAO;
 import com.mathew.gimnasio.modelos.Credenciales;
+import com.mathew.gimnasio.modelos.LoginResponse;
 import com.mathew.gimnasio.modelos.Usuario;
 import com.mathew.gimnasio.modelos.VerificacionRequest;
 import com.mathew.gimnasio.servicios.EmailService;
+import com.mathew.gimnasio.util.JwtService;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -25,6 +28,7 @@ import java.time.format.DateTimeParseException;
 public class AuthController {
 
     private UsuarioDAO dao = new UsuarioDAO();
+    private LogAccesoDAO logDAO = new LogAccesoDAO();
 
     // Regex (Tus validaciones se mantienen intactas)
     // Se usan expresiones regulares para asegurar formatos de texto precisos
@@ -68,9 +72,9 @@ public class AuthController {
             return error("El teléfono debe tener por lo menos 9 dígitos numéricos.");
         }
 
-        // 4. Validar Contraseña (mínimo 6 caracteres)
-        if (u.getContrasena() == null || u.getContrasena().length() < 6) {
-            return error("La contraseña debe tener al menos 6 caracteres por seguridad.");
+        // 4. Validar Contraseña (único criterio: mínimo 8 caracteres)
+        if (u.getContrasena() == null || u.getContrasena().length() < 8) {
+            return error("La contraseña debe tener al menos 8 caracteres por seguridad.");
         }
 
         // 5. Validar Email mediante Regex
@@ -109,10 +113,6 @@ public class AuthController {
             return error("El nombre de usuario NO puede tener espacios.");
         }
 
-        // 6. Validar Contraseña (duplicado preventivo, requiere mínimo 5)
-        if (u.getContrasena() == null || u.getContrasena().length() < 5) {
-            return error("La contraseña es muy débil. Debe tener mínimo 5 caracteres.");
-        }
 
         // ==========================================
         //  AQUÍ ESTÁ EL CAMBIO CLAVE (TRANSACCIÓN)
@@ -165,20 +165,24 @@ public class AuthController {
     }
 
     /**
-     * INICIO DE SESIÓN
-     * Verifica credenciales y el estado activo de la cuenta.
-     * @param credenciales Objeto con el usuario y la contraseña.
+     * INICIO DE SESIÓN (RF02: JWT + RF09: Registro en logs)
+     * Verifica credenciales, registra el acceso y devuelve JWT para autorización.
      */
     @POST
     @Path("/login")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public Response login(Credenciales credenciales) {
-        // Busca al usuario en la BD comparando las credenciales
         Usuario u = dao.login(credenciales.getUsuario(), credenciales.getContrasena());
         if (u != null) {
-            // Solo permite el acceso si ya verificó su correo (isActivo == true)
-            if (u.isActivo()) return Response.ok(u).build();
+            if (u.isActivo()) {
+                // RF09: Registrar acceso exitoso en logs
+                logDAO.registrarAcceso(u.getIdUsuario(), true);
+                // RF02: Generar JWT y devolver token + usuario
+                String token = JwtService.generarToken(u.getIdUsuario(), u.getIdRol(), u.getUsuario());
+                return Response.ok(new LoginResponse(token, u)).build();
+            }
+            logDAO.registrarAcceso(u.getIdUsuario(), false);
             return Response.status(403).entity("{\"mensaje\": \"Cuenta no verificada.\"}").build();
         }
         return Response.status(401).entity("{\"mensaje\": \"Credenciales incorrectas\"}").build();

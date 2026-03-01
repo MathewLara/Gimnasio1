@@ -392,14 +392,103 @@ public class UsuarioDAO {
         } catch(Exception e) {}
     }
 
-    // -------------------------------------------------------------------------
-    // STUBS (Plantillas vacías)
-    // Estos métodos están definidos para no romper el UsuarioController,
-    // pero deben ser implementados más adelante con sus sentencias SQL reales.
-    // -------------------------------------------------------------------------
     public boolean validarCodigo2FA(int id, String c) { return false; }
-    public List<Usuario> listar() { return new ArrayList<>(); }
-    public Usuario obtenerPorId(int id) { return null; }
-    public boolean actualizar(Usuario u) { return false; }
-    public boolean eliminar(int id) { return false; }
+
+    /**
+     * Lista todos los usuarios con rol y email (desde clientes o entrenadores).
+     */
+    public List<Usuario> listar() {
+        List<Usuario> lista = new ArrayList<>();
+        String sql = "SELECT u.id_usuario, u.id_rol, u.usuario, u.activo, " +
+                "COALESCE(u.nombre, c.nombre, e.nombre) as nombre, COALESCE(u.apellido, c.apellido, e.apellido) as apellido, " +
+                "c.email as email_c, e.email as email_e " +
+                "FROM usuarios u " +
+                "LEFT JOIN clientes c ON u.id_usuario = c.id_usuario " +
+                "LEFT JOIN entrenadores e ON u.id_usuario = e.id_usuario " +
+                "ORDER BY u.id_usuario DESC";
+        try (Connection conn = ConexionDB.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                Usuario u = new Usuario();
+                u.setIdUsuario(rs.getInt("id_usuario"));
+                u.setIdRol(rs.getInt("id_rol"));
+                u.setUsuario(rs.getString("usuario"));
+                u.setActivo(rs.getBoolean("activo"));
+                u.setNombre(rs.getString("nombre"));
+                u.setApellido(rs.getString("apellido"));
+                String email = rs.getString("email_c");
+                if (email == null) email = rs.getString("email_e");
+                u.setEmail(email);
+                lista.add(u);
+            }
+        } catch (Exception e) { e.printStackTrace(); }
+        return lista;
+    }
+
+    /**
+     * Obtiene un usuario por ID (sin contraseña).
+     */
+    public Usuario obtenerPorId(int id) {
+        String sql = "SELECT u.id_usuario, u.id_rol, u.usuario, u.activo, " +
+                "COALESCE(u.nombre, c.nombre, e.nombre) as nombre, COALESCE(u.apellido, c.apellido, e.apellido) as apellido, " +
+                "c.email as email_c, e.email as email_e " +
+                "FROM usuarios u " +
+                "LEFT JOIN clientes c ON u.id_usuario = c.id_usuario " +
+                "LEFT JOIN entrenadores e ON u.id_usuario = e.id_usuario " +
+                "WHERE u.id_usuario = ?";
+        try (Connection conn = ConexionDB.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    Usuario u = new Usuario();
+                    u.setIdUsuario(rs.getInt("id_usuario"));
+                    u.setIdRol(rs.getInt("id_rol"));
+                    u.setUsuario(rs.getString("usuario"));
+                    u.setActivo(rs.getBoolean("activo"));
+                    u.setNombre(rs.getString("nombre"));
+                    u.setApellido(rs.getString("apellido"));
+                    String email = rs.getString("email_c");
+                    if (email == null) email = rs.getString("email_e");
+                    u.setEmail(email);
+                    return u;
+                }
+            }
+        } catch (Exception e) { e.printStackTrace(); }
+        return null;
+    }
+
+    /**
+     * Actualiza usuario (nombre, apellido, usuario; opcionalmente contraseña).
+     */
+    public boolean actualizar(Usuario u) {
+        if (u == null || u.getIdUsuario() <= 0) return false;
+        boolean cambiaPass = (u.getContrasena() != null && !u.getContrasena().trim().isEmpty());
+        String sql = cambiaPass
+                ? "UPDATE usuarios SET usuario=?, contrasena=?, nombre=?, apellido=? WHERE id_usuario=?"
+                : "UPDATE usuarios SET usuario=?, nombre=?, apellido=? WHERE id_usuario=?";
+        try (Connection conn = ConexionDB.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, u.getUsuario());
+            if (cambiaPass) {
+                ps.setString(2, SecurityUtil.encriptar(u.getContrasena()));
+                ps.setString(3, u.getNombre());
+                ps.setString(4, u.getApellido());
+                ps.setInt(5, u.getIdUsuario());
+            } else {
+                ps.setString(2, u.getNombre());
+                ps.setString(3, u.getApellido());
+                ps.setInt(4, u.getIdUsuario());
+            }
+            return ps.executeUpdate() > 0;
+        } catch (Exception e) { e.printStackTrace(); return false; }
+    }
+
+    /**
+     * Eliminado lógico: desactiva el usuario.
+     */
+    public boolean eliminar(int id) {
+        return cambiarEstadoUsuario(id, false);
+    }
 }

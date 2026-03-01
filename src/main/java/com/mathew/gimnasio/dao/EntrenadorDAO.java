@@ -1,11 +1,14 @@
 package com.mathew.gimnasio.dao;
 
 import com.mathew.gimnasio.configuracion.ConexionDB;
+import com.mathew.gimnasio.modelos.EjercicioEnRutinaDTO;
 import com.mathew.gimnasio.modelos.EntrenadorDashboardDTO;
 import com.mathew.gimnasio.modelos.NuevaRutinaDTO;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
+import com.mathew.gimnasio.modelos.EntrenadorDTO;
+import com.mathew.gimnasio.util.JsonUtil;
+import com.mathew.gimnasio.util.SecurityUtil;
+
+import java.sql.*;
 import java.util.ArrayList;
 
 /**
@@ -132,30 +135,67 @@ public class EntrenadorDAO {
             // 2. Limpieza: Si le asignamos una rutina nueva, borramos el "completado" de hoy.
             String sqlReset = "DELETE FROM historial_entrenamientos WHERE id_cliente = ? AND fecha = CURRENT_DATE";
             PreparedStatement psReset = conn.prepareStatement(sqlReset);
-            psReset.setInt(1, datos.idCliente);
+            psReset.setInt(1, datos.getIdCliente());
             psReset.executeUpdate();
 
             // 3. Guardamos la cabecera de la rutina.
             String sqlRutina = "INSERT INTO rutinas (id_cliente, id_entrenador, nombre_rutina, fecha_creacion, activa) VALUES (?, ?, ?, CURRENT_DATE, TRUE) RETURNING id_rutina";
             ps = conn.prepareStatement(sqlRutina);
-            ps.setInt(1, datos.idCliente);
+            ps.setInt(1, datos.getIdCliente());
             ps.setInt(2, idEntrenador);
-            ps.setString(3, datos.nombreRutina);
+            ps.setString(3, datos.getNombreRutina());
             rs = ps.executeQuery();
 
             int idRutina = 0;
             if (rs.next()) idRutina = rs.getInt(1);
 
-            // 4. Guardamos el listado de ejercicios vinculados.
-            String sqlDetalle = "INSERT INTO detalle_rutinas (id_rutina, id_ejercicio, series, repeticiones) VALUES (?, ?, '4 Series', '12 Reps')";
-            ps = conn.prepareStatement(sqlDetalle);
-
-            for (Integer idEjercicio : datos.idsEjercicios) {
-                ps.setInt(1, idRutina);
-                ps.setInt(2, idEjercicio);
-                ps.addBatch(); // Los preparamos en grupo
+            // 4. Guardamos ejercicios (con series/reps/descanso si vienen en ejercicios)
+            if (datos.getEjercicios() != null && !datos.getEjercicios().isEmpty()) {
+                try {
+                    String sqlDetalle = "INSERT INTO detalle_rutinas (id_rutina, id_ejercicio, series, repeticiones, descanso) VALUES (?, ?, ?, ?, ?)";
+                    ps = conn.prepareStatement(sqlDetalle);
+                    for (EjercicioEnRutinaDTO e : datos.getEjercicios()) {
+                        ps.setInt(1, idRutina);
+                        ps.setInt(2, e.idEjercicio);
+                        ps.setString(3, e.series != null ? e.series : "4");
+                        ps.setString(4, e.repeticiones != null ? e.repeticiones : "12");
+                        ps.setString(5, e.descanso != null ? e.descanso : "");
+                        ps.addBatch();
+                    }
+                    ps.executeBatch();
+                } catch (SQLException ex) {
+                    ps = conn.prepareStatement("INSERT INTO detalle_rutinas (id_rutina, id_ejercicio, series, repeticiones) VALUES (?, ?, ?, ?)");
+                    for (EjercicioEnRutinaDTO e : datos.getEjercicios()) {
+                        ps.setInt(1, idRutina);
+                        ps.setInt(2, e.idEjercicio);
+                        ps.setString(3, e.series != null ? e.series : "4");
+                        ps.setString(4, e.repeticiones != null ? e.repeticiones : "12");
+                        ps.addBatch();
+                    }
+                    ps.executeBatch();
+                }
+            } else if (datos.getIdsEjercicios() != null) {
+                String sqlDetalle = "INSERT INTO detalle_rutinas (id_rutina, id_ejercicio, series, repeticiones, descanso) VALUES (?, ?, '4', '12', ?)";
+                try {
+                    ps = conn.prepareStatement(sqlDetalle);
+                    for (Integer idEjercicio : datos.getIdsEjercicios()) {
+                        ps.setInt(1, idRutina);
+                        ps.setInt(2, idEjercicio);
+                        ps.setString(3, "60 seg");
+                        ps.addBatch();
+                    }
+                    ps.executeBatch();
+                } catch (SQLException ex) {
+                    sqlDetalle = "INSERT INTO detalle_rutinas (id_rutina, id_ejercicio, series, repeticiones) VALUES (?, ?, '4 Series', '12 Reps')";
+                    ps = conn.prepareStatement(sqlDetalle);
+                    for (Integer idEjercicio : datos.getIdsEjercicios()) {
+                        ps.setInt(1, idRutina);
+                        ps.setInt(2, idEjercicio);
+                        ps.addBatch();
+                    }
+                    ps.executeBatch();
+                }
             }
-            ps.executeBatch(); // Los guardamos todos de golpe
 
             conn.commit(); // Confirmamos que todo se guardó bien
             return true;
@@ -233,8 +273,8 @@ public class EntrenadorDAO {
             // 1. Cambiamos los datos principales.
             String sqlUpdate = "UPDATE rutinas SET nombre_rutina = ?, id_cliente = ? WHERE id_rutina = ?";
             PreparedStatement ps = conn.prepareStatement(sqlUpdate);
-            ps.setString(1, datos.nombreRutina);
-            ps.setInt(2, datos.idCliente);
+            ps.setString(1, datos.getNombreRutina());
+            ps.setInt(2, datos.getIdCliente());
             ps.setInt(3, idRutina);
             ps.executeUpdate();
 
@@ -243,19 +283,46 @@ public class EntrenadorDAO {
             ps.setInt(1, idRutina);
             ps.executeUpdate();
 
-            // 3. Insertamos la nueva lista de ejercicios.
-            String sqlDetalle = "INSERT INTO detalle_rutinas (id_rutina, id_ejercicio, series, repeticiones) VALUES (?, ?, '4 Series', '12 Reps')";
-            ps = conn.prepareStatement(sqlDetalle);
-            for (Integer idEjercicio : datos.idsEjercicios) {
-                ps.setInt(1, idRutina);
-                ps.setInt(2, idEjercicio);
-                ps.addBatch();
+            // 3. Insertamos ejercicios
+            if (datos.getEjercicios() != null && !datos.getEjercicios().isEmpty()) {
+                String sqlDetalle = "INSERT INTO detalle_rutinas (id_rutina, id_ejercicio, series, repeticiones, descanso) VALUES (?, ?, ?, ?, ?)";
+                try {
+                    ps = conn.prepareStatement(sqlDetalle);
+                    for (EjercicioEnRutinaDTO e : datos.getEjercicios()) {
+                        ps.setInt(1, idRutina);
+                        ps.setInt(2, e.idEjercicio);
+                        ps.setString(3, e.series != null ? e.series : "4");
+                        ps.setString(4, e.repeticiones != null ? e.repeticiones : "12");
+                        ps.setString(5, e.descanso != null ? e.descanso : "");
+                        ps.addBatch();
+                    }
+                    ps.executeBatch();
+                } catch (SQLException sqle) {
+                    sqlDetalle = "INSERT INTO detalle_rutinas (id_rutina, id_ejercicio, series, repeticiones) VALUES (?, ?, ?, ?)";
+                    ps = conn.prepareStatement(sqlDetalle);
+                    for (EjercicioEnRutinaDTO e : datos.getEjercicios()) {
+                        ps.setInt(1, idRutina);
+                        ps.setInt(2, e.idEjercicio);
+                        ps.setString(3, e.series != null ? e.series : "4");
+                        ps.setString(4, e.repeticiones != null ? e.repeticiones : "12");
+                        ps.addBatch();
+                    }
+                    ps.executeBatch();
+                }
+            } else if (datos.getIdsEjercicios() != null) {
+                String sqlDetalle = "INSERT INTO detalle_rutinas (id_rutina, id_ejercicio, series, repeticiones) VALUES (?, ?, '4 Series', '12 Reps')";
+                ps = conn.prepareStatement(sqlDetalle);
+                for (Integer idEjercicio : datos.getIdsEjercicios()) {
+                    ps.setInt(1, idRutina);
+                    ps.setInt(2, idEjercicio);
+                    ps.addBatch();
+                }
+                ps.executeBatch();
             }
-            ps.executeBatch();
 
             // 4. Si editamos la rutina, reseteamos el historial de hoy para que el alumno pueda marcarla otra vez.
             ps = conn.prepareStatement("DELETE FROM historial_entrenamientos WHERE id_cliente = ? AND fecha = CURRENT_DATE");
-            ps.setInt(1, datos.idCliente);
+            ps.setInt(1, datos.getIdCliente());
             ps.executeUpdate();
 
             conn.commit();
@@ -290,4 +357,148 @@ public class EntrenadorDAO {
             return false;
         }
     }
+
+    // ========== CRUD ENTRENADORES (RF04) ==========
+
+    public String listarEntrenadoresJSON() {
+        StringBuilder json = new StringBuilder("[");
+        try (Connection conn = ConexionDB.getConnection()) {
+            String sql = "SELECT e.id_entrenador, e.id_usuario, e.nombre, e.apellido, e.email, e.especialidad, u.usuario, u.activo " +
+                    "FROM entrenadores e JOIN usuarios u ON e.id_usuario = u.id_usuario ORDER BY e.id_entrenador";
+            PreparedStatement ps = conn.prepareStatement(sql);
+            ResultSet rs = ps.executeQuery();
+            boolean first = true;
+            while (rs.next()) {
+                if (!first) json.append(",");
+                json.append("{\"idEntrenador\":").append(rs.getInt("id_entrenador"))
+                        .append(",\"idUsuario\":").append(rs.getInt("id_usuario"))
+                        .append(",\"nombre\":\"").append(JsonUtil.escape(rs.getString("nombre")))
+                        .append("\",\"apellido\":\"").append(JsonUtil.escape(rs.getString("apellido")))
+                        .append("\",\"email\":\"").append(JsonUtil.escape(rs.getString("email")))
+                        .append("\",\"usuario\":\"").append(JsonUtil.escape(rs.getString("usuario")))
+                        .append("\",\"especialidad\":\"").append(JsonUtil.escape(rs.getString("especialidad")))
+                        .append("\",\"activo\":").append(rs.getBoolean("activo")).append("}");
+                first = false;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        json.append("]");
+        return json.toString();
+    }
+
+    public String obtenerEntrenadorJSON(int idEntrenador) {
+        try (Connection conn = ConexionDB.getConnection()) {
+            String sql = "SELECT e.id_entrenador, e.id_usuario, e.nombre, e.apellido, e.email, e.especialidad, e.notas_desempeno, u.usuario, u.activo " +
+                    "FROM entrenadores e JOIN usuarios u ON e.id_usuario = u.id_usuario WHERE e.id_entrenador = ?";
+            PreparedStatement ps = conn.prepareStatement(sql);
+            ps.setInt(1, idEntrenador);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) {
+                return "{\"idEntrenador\":" + rs.getInt("id_entrenador") +
+                        ",\"idUsuario\":" + rs.getInt("id_usuario") +
+                        ",\"nombre\":\"" + JsonUtil.escape(rs.getString("nombre")) + "\"" +
+                        ",\"apellido\":\"" + JsonUtil.escape(rs.getString("apellido")) + "\"" +
+                        ",\"email\":\"" + JsonUtil.escape(rs.getString("email")) + "\"" +
+                        ",\"usuario\":\"" + JsonUtil.escape(rs.getString("usuario")) + "\"" +
+                        ",\"especialidad\":\"" + JsonUtil.escape(rs.getString("especialidad")) + "\"" +
+                        ",\"notasDesempeno\":\"" + JsonUtil.escape(rs.getString("notas_desempeno")) + "\"" +
+                        ",\"activo\":" + rs.getBoolean("activo") + "}";
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    public boolean crearEntrenador(EntrenadorDTO dto) {
+        Connection conn = null;
+        try {
+            conn = ConexionDB.getConnection();
+            conn.setAutoCommit(false);
+            String sqlUsu = "INSERT INTO usuarios (id_rol, usuario, contrasena, activo, nombre, apellido) VALUES (3, ?, ?, true, ?, ?)";
+            PreparedStatement ps = conn.prepareStatement(sqlUsu, Statement.RETURN_GENERATED_KEYS);
+            ps.setString(1, dto.getUsuario());
+            ps.setString(2, SecurityUtil.encriptar(dto.getContrasena() != null ? dto.getContrasena() : "123456"));
+            ps.setString(3, dto.getNombre());
+            ps.setString(4, dto.getApellido());
+            ps.executeUpdate();
+            ResultSet rs = ps.getGeneratedKeys();
+            if (!rs.next()) { conn.rollback(); return false; }
+            int idUsuario = rs.getInt(1);
+            String sqlEnt = "INSERT INTO entrenadores (id_usuario, nombre, apellido, email, especialidad) VALUES (?, ?, ?, ?, ?)";
+            ps = conn.prepareStatement(sqlEnt);
+            ps.setInt(1, idUsuario);
+            ps.setString(2, dto.getNombre());
+            ps.setString(3, dto.getApellido());
+            ps.setString(4, dto.getEmail());
+            ps.setString(5, dto.getEspecialidad());
+            ps.executeUpdate();
+            conn.commit();
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            try { if (conn != null) conn.rollback(); } catch (SQLException ex) {}
+            return false;
+        } finally {
+            try { if (conn != null) conn.close(); } catch (SQLException ex) {}
+        }
+    }
+
+    public boolean actualizarEntrenador(int idEntrenador, EntrenadorDTO dto) {
+        try (Connection conn = ConexionDB.getConnection()) {
+            int idUsuario = 0;
+            PreparedStatement ps = conn.prepareStatement("SELECT id_usuario FROM entrenadores WHERE id_entrenador = ?");
+            ps.setInt(1, idEntrenador);
+            ResultSet rs = ps.executeQuery();
+            if (!rs.next()) return false;
+            idUsuario = rs.getInt("id_usuario");
+
+            String sqlEnt = "UPDATE entrenadores SET nombre=?, apellido=?, email=?, especialidad=? WHERE id_entrenador=?";
+            ps = conn.prepareStatement(sqlEnt);
+            ps.setString(1, dto.getNombre());
+            ps.setString(2, dto.getApellido());
+            ps.setString(3, dto.getEmail());
+            ps.setString(4, dto.getEspecialidad());
+            ps.setInt(5, idEntrenador);
+            ps.executeUpdate();
+
+            if (dto.getContrasena() != null && !dto.getContrasena().trim().isEmpty()) {
+                ps = conn.prepareStatement("UPDATE usuarios SET usuario=?, contrasena=?, nombre=?, apellido=? WHERE id_usuario=?");
+                ps.setString(1, dto.getUsuario());
+                ps.setString(2, SecurityUtil.encriptar(dto.getContrasena()));
+                ps.setString(3, dto.getNombre());
+                ps.setString(4, dto.getApellido());
+                ps.setInt(5, idUsuario);
+            } else {
+                ps = conn.prepareStatement("UPDATE usuarios SET usuario=?, nombre=?, apellido=? WHERE id_usuario=?");
+                ps.setString(1, dto.getUsuario());
+                ps.setString(2, dto.getNombre());
+                ps.setString(3, dto.getApellido());
+                ps.setInt(4, idUsuario);
+            }
+            ps.executeUpdate();
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    public boolean eliminarEntrenador(int idEntrenador) {
+        try (Connection conn = ConexionDB.getConnection()) {
+            PreparedStatement ps = conn.prepareStatement("SELECT id_usuario FROM entrenadores WHERE id_entrenador = ?");
+            ps.setInt(1, idEntrenador);
+            ResultSet rs = ps.executeQuery();
+            if (!rs.next()) return false;
+            int idUsuario = rs.getInt("id_usuario");
+            ps = conn.prepareStatement("UPDATE usuarios SET activo = FALSE WHERE id_usuario = ?");
+            ps.setInt(1, idUsuario);
+            return ps.executeUpdate() > 0;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
 }

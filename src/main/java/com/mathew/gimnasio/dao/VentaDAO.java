@@ -2,6 +2,8 @@ package com.mathew.gimnasio.dao;
 
 import com.mathew.gimnasio.configuracion.ConexionDB;
 import com.mathew.gimnasio.modelos.SolicitudVenta;
+import com.mathew.gimnasio.util.JsonUtil;
+
 import java.sql.*;
 
 /**
@@ -35,13 +37,22 @@ public class VentaDAO {
              */
             conn.setAutoCommit(false);
 
-            /* 2. REGISTRAR EL PAGO
-             * Primero creamos el registro en la tabla de 'pagos'.
-             * Usamos 'RETURNING id_pago' para saber qué número de pago generó el sistema.
-             */
-            String sqlPago = "INSERT INTO pagos (monto_pagado, metodo_pago, fecha_pago) VALUES (?, 'EFECTIVO', NOW()) RETURNING id_pago";
+            // Obtener id_cliente si existe (para historial y comprobantes)
+            Integer idCliente = null;
+            if (venta.getIdUsuario() > 0) {
+                PreparedStatement psCliente = conn.prepareStatement("SELECT id_cliente FROM clientes WHERE id_usuario = ?");
+                psCliente.setInt(1, venta.getIdUsuario());
+                ResultSet rsCliente = psCliente.executeQuery();
+                if (rsCliente.next()) idCliente = rsCliente.getInt("id_cliente");
+            }
+
+            /* 2. REGISTRAR EL PAGO (con id_cliente si existe - ver migracion_rf.sql) */
+            String sqlPago = idCliente != null
+                    ? "INSERT INTO pagos (monto_pagado, metodo_pago, fecha_pago, id_cliente) VALUES (?, 'EFECTIVO', NOW(), ?) RETURNING id_pago"
+                    : "INSERT INTO pagos (monto_pagado, metodo_pago, fecha_pago) VALUES (?, 'EFECTIVO', NOW()) RETURNING id_pago";
             psPago = conn.prepareStatement(sqlPago);
             psPago.setDouble(1, venta.getTotal());
+            if (idCliente != null) psPago.setInt(2, idCliente);
             rsPago = psPago.executeQuery();
 
             int idPago = 0;
@@ -52,12 +63,15 @@ public class VentaDAO {
              * Vinculamos esta factura con el ID del pago que acabamos de crear arriba.
              */
             String numFactura = "FAC-" + System.currentTimeMillis();
-            String sqlFactura = "INSERT INTO factura_encabezados (id_pago, numero_factura, subtotal, iva, total_pagado, fecha_emision) VALUES (?, ?, ?, 0, ?, NOW()) RETURNING id_factura";
+            String sqlFactura = idCliente != null
+                    ? "INSERT INTO factura_encabezados (id_pago, numero_factura, subtotal, iva, total_pagado, fecha_emision, id_cliente) VALUES (?, ?, ?, 0, ?, NOW(), ?) RETURNING id_factura"
+                    : "INSERT INTO factura_encabezados (id_pago, numero_factura, subtotal, iva, total_pagado, fecha_emision) VALUES (?, ?, ?, 0, ?, NOW()) RETURNING id_factura";
             psFactura = conn.prepareStatement(sqlFactura);
             psFactura.setInt(1, idPago);
             psFactura.setString(2, numFactura);
             psFactura.setDouble(3, venta.getTotal());
             psFactura.setDouble(4, venta.getTotal());
+            if (idCliente != null) psFactura.setInt(5, idCliente);
             rsFactura = psFactura.executeQuery();
 
             int idFactura = 0;
@@ -103,7 +117,52 @@ public class VentaDAO {
             try { if (rsPago != null) rsPago.close(); } catch (Exception e) {}
             try { if (psPago != null) psPago.close(); } catch (Exception e) {}
             try { if (psDetalle != null) psDetalle.close(); } catch (Exception e) {}
+            try { if (rsFactura != null) rsFactura.close(); } catch (Exception e) {}
+            try { if (psFactura != null) psFactura.close(); } catch (Exception e) {}
             try { if (conn != null) conn.close(); } catch (Exception e) {}
         }
+    }
+
+    /**
+     * Obtiene el comprobante (factura + detalle) como JSON (RF07).
+     */
+    public String obtenerComprobanteJSON(int idFactura) {
+        StringBuilder json = new StringBuilder();
+        try (Connection conn = ConexionDB.getConnection()) {
+            PreparedStatement psEnc = conn.prepareStatement(
+                    "SELECT f.id_factura, f.numero_factura, f.fecha_emision, f.subtotal, f.iva, f.total_pagado " +
+                    "FROM factura_encabezados f WHERE f.id_factura = ?");
+            psEnc.setInt(1, idFactura);
+            ResultSet rsEnc = psEnc.executeQuery();
+            if (!rsEnc.next()) return null;
+
+            json.append("{")
+                    .append("\"idFactura\":").append(rsEnc.getInt("id_factura")).append(",")
+                    .append("\"numeroFactura\":\"").append(rsEnc.getString("numero_factura")).append("\",")
+                    .append("\"fechaEmision\":\"").append(rsEnc.getTimestamp("fecha_emision")).append("\",")
+                    .append("\"subtotal\":").append(rsEnc.getDouble("subtotal")).append(",")
+                    .append("\"iva\":").append(rsEnc.getDouble("iva")).append(",")
+                    .append("\"totalPagado\":").append(rsEnc.getDouble("total_pagado")).append(",")
+                    .append("\"detalle\":[");
+
+            PreparedStatement psDet = conn.prepareStatement(
+                    "SELECT descripcion, cantidad, precio_unitario, subtotal_linea FROM factura_detalles WHERE id_factura = ?");
+            psDet.setInt(1, idFactura);
+            ResultSet rsDet = psDet.executeQuery();
+            boolean first = true;
+            while (rsDet.next()) {
+                if (!first) json.append(",");
+                json.append("{\"descripcion\":\"").append(JsonUtil.escape(rsDet.getString("descripcion")))
+                        .append("\",\"cantidad\":").append(rsDet.getInt("cantidad"))
+                        .append(",\"precioUnitario\":").append(rsDet.getDouble("precio_unitario"))
+                        .append(",\"subtotal\":").append(rsDet.getDouble("subtotal_linea")).append("}");
+                first = false;
+            }
+            json.append("]}");
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+        return json.toString();
     }
 }

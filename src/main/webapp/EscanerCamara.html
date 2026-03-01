@@ -56,8 +56,10 @@
         lblInfo.textContent = "ID Detectado: " + id;
 
         try {
-            // --- CAMBIO CLAVE: RUTA RELATIVA (Funciona con Ngrok y Localhost) ---
-            const res = await fetch(`/Gimnasio/api/accesos/escanear/${id}`, { method: 'POST' });
+            // Ruta relativa al origen de la página (ej. /Gimnasio/ o /). Si el deploy cambia de contexto, funciona igual.
+            const base = window.location.pathname.split('/').slice(0, -1).join('/') || '';
+            const apiBase = base ? base + '/api' : '/api';
+            const res = await fetch(`${apiBase}/accesos/escanear/${id}`, { method: 'POST' });
 
             if(res.ok) {
                 const data = await res.json();

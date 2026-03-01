@@ -5,35 +5,40 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 
 /**
- * CONEXIÓN A LA BASE DE DATOS
- * Esta clase es el puente central entre nuestra aplicación Java y PostgreSQL.
- * Sigue el patrón Singleton (o de acceso estático) para proporcionar conexiones
- * cada vez que un DAO necesita guardar o consultar información.
+ * Conexión a la base de datos.
+ * Credenciales desde variables de entorno: DB_URL, DB_USER, DB_PASS.
+ * No hardcodear en código; usar .env en local (no commitear) o config en el servidor.
+ *
+ * SSL: Si la URL no contiene parámetro "ssl", se añade sslmode=require automáticamente.
+ * Esto es obligatorio en proveedores cloud (Render, Neon, Supabase).
+ * Para desarrollo local sin SSL, añade "?sslmode=disable" explícitamente en DB_URL.
  */
 public class ConexionDB {
 
-    // Credenciales y ruta de nuestra base de datos PostgreSQL
-    // Credenciales y ruta de nuestra base de datos PostgreSQL
-    private static final String URL = "jdbc:postgresql://dpg-d6eeubs1hm7c73f41s90-a.ohio-postgres.render.com:5432/gimnasio_db_m3ac?sslmode=require";
-    private static final String USER = "gimnasio_db_m3ac_user";
-    private static final String PASS = "aLyVho41TyHjg6ciMwL9i59lX8P8jIGl";
+    private static final String URL  = buildUrl(ConfiguracionEnv.get("DB_URL",  ""));
+    private static final String USER = ConfiguracionEnv.get("DB_USER", "");
+    private static final String PASS = ConfiguracionEnv.get("DB_PASS", "");
 
     /**
-     * OBTENER CONEXIÓN
-     * Se encarga de cargar el driver de la base de datos y establecer la conexión activa.
-     * @return Un objeto Connection listo para ejecutar consultas SQL, o null si falla.
+     * Si la URL ya contiene algún parámetro relacionado con SSL no la toca.
+     * De lo contrario añade sslmode=require para que funcione en producción.
      */
+    private static String buildUrl(String url) {
+        if (url == null || url.isBlank()) return url;
+        if (url.contains("ssl")) return url;                  // ya tiene sslmode=... o ssl=true
+        return url + (url.contains("?") ? "&" : "?") + "sslmode=require";
+    }
+
     public static Connection getConnection() {
         try {
-            // Registramos el driver de PostgreSQL para que Java sepa cómo comunicarse
+            if (URL == null || URL.isBlank() || USER.isBlank()) {
+                System.err.println("Configura DB_URL, DB_USER y DB_PASS (variables de entorno).");
+                return null;
+            }
             Class.forName("org.postgresql.Driver");
-
-            // Intentamos abrir la puerta hacia la base de datos usando nuestras credenciales
             return DriverManager.getConnection(URL, USER, PASS);
-
         } catch (ClassNotFoundException | SQLException e) {
-            // Si la base de datos está apagada o la contraseña es incorrecta, mostramos el error
-            System.out.println("Error de conexión: " + e.getMessage());
+            System.err.println("Error de conexión: " + e.getMessage());
             return null;
         }
     }
