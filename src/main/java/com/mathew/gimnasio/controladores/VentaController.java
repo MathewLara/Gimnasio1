@@ -48,11 +48,22 @@ public class VentaController {
         boolean exito = ventaDAO.registrarVenta(venta);
 
         if (exito) {
-            // Si el DAO nos confirma que se guardó bien, enviamos el mensaje de éxito
             return Response.ok("{\"mensaje\":\"Venta procesada correctamente\", \"status\":\"OK\"}").build();
         } else {
             // Si hubo un error (ej. se cayó la base de datos), enviamos un error 500
             return Response.status(500).entity("{\"mensaje\":\"Error al guardar la venta en la base de datos\"}").build();
         }
+    }
+
+    /**
+     * GET /ventas/{id}/comprobante - Obtener comprobante de venta (RF07)
+     */
+    @GET
+    @Path("/{id}/comprobante")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response getComprobante(@PathParam("id") int id) {
+        String json = ventaDAO.obtenerComprobanteJSON(id);
+        if (json != null) return Response.ok(json).build();
+        return Response.status(404).entity("{\"mensaje\":\"Comprobante no encontrado\"}").build();
     }
 }

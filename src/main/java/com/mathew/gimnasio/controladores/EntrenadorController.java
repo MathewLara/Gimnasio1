@@ -2,6 +2,7 @@ package com.mathew.gimnasio.controladores;
 
 import com.mathew.gimnasio.dao.EntrenadorDAO;
 import com.mathew.gimnasio.modelos.EntrenadorDashboardDTO;
+import com.mathew.gimnasio.modelos.EntrenadorDTO;
 import com.mathew.gimnasio.modelos.NuevaRutinaDTO;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
@@ -106,9 +107,50 @@ public class EntrenadorController {
     @Path("/rutinas/{idRutina}/reactivar")
     @Produces(MediaType.APPLICATION_JSON)
     public Response reactivarRutina(@PathParam("idRutina") int id) {
-        // Cambiamos el estado de la rutina de 'desactivada' a 'activa' nuevamente
         boolean exito = dao.reactivarRutina(id);
         if (exito) return Response.ok("{\"mensaje\": \"Rutina restaurada\"}").build();
         return Response.status(500).entity("{\"mensaje\": \"Error al restaurar\"}").build();
+    }
+
+    // ========== CRUD ENTRENADORES (RF04) ==========
+
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response listarEntrenadores() {
+        return Response.ok(dao.listarEntrenadoresJSON()).build();
+    }
+
+    @GET
+    @Path("/{id}")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response obtenerEntrenador(@PathParam("id") int id) {
+        String json = dao.obtenerEntrenadorJSON(id);
+        if (json != null) return Response.ok(json).build();
+        return Response.status(404).entity("{\"mensaje\":\"Entrenador no encontrado\"}").build();
+    }
+
+    @POST
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response crearEntrenador(EntrenadorDTO dto) {
+        if (dao.crearEntrenador(dto)) return Response.ok("{\"mensaje\":\"Entrenador creado\"}").build();
+        return Response.status(400).entity("{\"mensaje\":\"Error al crear entrenador\"}").build();
+    }
+
+    @PUT
+    @Path("/{id}")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response actualizarEntrenador(@PathParam("id") int id, EntrenadorDTO dto) {
+        if (dao.actualizarEntrenador(id, dto)) return Response.ok("{\"mensaje\":\"Entrenador actualizado\"}").build();
+        return Response.status(400).entity("{\"mensaje\":\"Error al actualizar\"}").build();
+    }
+
+    @DELETE
+    @Path("/{id}")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response eliminarEntrenador(@PathParam("id") int id) {
+        if (dao.eliminarEntrenador(id)) return Response.ok("{\"mensaje\":\"Entrenador desactivado\"}").build();
+        return Response.status(400).entity("{\"mensaje\":\"Error al eliminar\"}").build();
     }
 }
