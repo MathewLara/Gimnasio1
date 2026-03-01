@@ -7,7 +7,9 @@ import java.sql.*;
 import java.time.LocalDate;
 
 /**
- * DAO para asignación de membresías (RF07)
+ * DAO para asignación de membresías (RF07).
+ * Nota: clientes.id_membresia referencia membresias(id_membresia). Si se envía idTipoMembresia,
+ * se asume que coincide con id_membresia (p. ej. mismos IDs en ambas tablas); si no, usar solo idMembresia.
  */
 public class MembresiaDAO {
 

@@ -1,6 +1,7 @@
 package com.mathew.gimnasio.dao;
 
 import com.mathew.gimnasio.configuracion.ConexionDB;
+import com.mathew.gimnasio.util.JsonUtil;
 
 import java.sql.*;
 import java.time.LocalDate;
@@ -80,9 +81,9 @@ public class ReporteDAO {
             while (rs.next()) {
                 if (!first) json.append(",");
                 json.append("{\"idRutina\":").append(rs.getInt("id_rutina"))
-                        .append(",\"nombreRutina\":\"").append(escape(rs.getString("nombre_rutina")))
-                        .append("\",\"cliente\":\"").append(escape(rs.getString("cliente")))
-                        .append("\",\"entrenador\":\"").append(escape(rs.getString("entrenador")))
+                        .append(",\"nombreRutina\":\"").append(JsonUtil.escape(rs.getString("nombre_rutina")))
+                        .append("\",\"cliente\":\"").append(JsonUtil.escape(rs.getString("cliente")))
+                        .append("\",\"entrenador\":\"").append(JsonUtil.escape(rs.getString("entrenador")))
                         .append("\",\"fechaCreacion\":\"").append(rs.getDate("fecha_creacion")).append("\"}");
                 first = false;
             }
@@ -102,7 +103,4 @@ public class ReporteDAO {
         }
     }
 
-    private static String escape(String s) {
-        return s != null ? s.replace("\\", "\\\\").replace("\"", "\\\"") : "";
-    }
 }

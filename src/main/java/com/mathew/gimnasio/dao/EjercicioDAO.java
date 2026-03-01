@@ -1,6 +1,7 @@
 package com.mathew.gimnasio.dao;
 
 import com.mathew.gimnasio.configuracion.ConexionDB;
+import com.mathew.gimnasio.util.JsonUtil;
 
 import java.sql.*;
 import java.util.ArrayList;
@@ -52,8 +53,8 @@ public class EjercicioDAO {
             while (rs.next()) {
                 if (!first) json.append(",");
                 json.append("{\"idEjercicio\":").append(rs.getInt("id_ejercicio"))
-                        .append(",\"nombre\":\"").append(escape(rs.getString("nombre_ejercicio")))
-                        .append("\",\"grupoMuscular\":\"").append(escape(rs.getString("grupo_muscular"))).append("\"}");
+                        .append(",\"nombre\":\"").append(JsonUtil.escape(rs.getString("nombre_ejercicio")))
+                        .append("\",\"grupoMuscular\":\"").append(JsonUtil.escape(rs.getString("grupo_muscular"))).append("\"}");
                 first = false;
             }
         } catch (Exception e) {
@@ -63,7 +64,4 @@ public class EjercicioDAO {
         return json.toString();
     }
 
-    private static String escape(String s) {
-        return s != null ? s.replace("\\", "\\\\").replace("\"", "\\\"") : "";
-    }
 }

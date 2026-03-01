@@ -40,7 +40,8 @@ public class ClienteController {
         return Response.status(404).entity("{\"mensaje\":\"Cliente no encontrado\"}").build();
     }
     /**
-     * GET /clientes/{id} - Obtener cliente por id_cliente (RF03)
+     * GET /clientes/{id} - Obtener cliente por id_cliente (RF03).
+     * {id} = id_cliente (no id_usuario).
      */
     @GET
     @Path("/{id}")

@@ -5,6 +5,7 @@ import com.mathew.gimnasio.modelos.EjercicioEnRutinaDTO;
 import com.mathew.gimnasio.modelos.EntrenadorDashboardDTO;
 import com.mathew.gimnasio.modelos.NuevaRutinaDTO;
 import com.mathew.gimnasio.modelos.EntrenadorDTO;
+import com.mathew.gimnasio.util.JsonUtil;
 import com.mathew.gimnasio.util.SecurityUtil;
 
 import java.sql.*;
@@ -134,26 +135,26 @@ public class EntrenadorDAO {
             // 2. Limpieza: Si le asignamos una rutina nueva, borramos el "completado" de hoy.
             String sqlReset = "DELETE FROM historial_entrenamientos WHERE id_cliente = ? AND fecha = CURRENT_DATE";
             PreparedStatement psReset = conn.prepareStatement(sqlReset);
-            psReset.setInt(1, datos.idCliente);
+            psReset.setInt(1, datos.getIdCliente());
             psReset.executeUpdate();
 
             // 3. Guardamos la cabecera de la rutina.
             String sqlRutina = "INSERT INTO rutinas (id_cliente, id_entrenador, nombre_rutina, fecha_creacion, activa) VALUES (?, ?, ?, CURRENT_DATE, TRUE) RETURNING id_rutina";
             ps = conn.prepareStatement(sqlRutina);
-            ps.setInt(1, datos.idCliente);
+            ps.setInt(1, datos.getIdCliente());
             ps.setInt(2, idEntrenador);
-            ps.setString(3, datos.nombreRutina);
+            ps.setString(3, datos.getNombreRutina());
             rs = ps.executeQuery();
 
             int idRutina = 0;
             if (rs.next()) idRutina = rs.getInt(1);
 
             // 4. Guardamos ejercicios (con series/reps/descanso si vienen en ejercicios)
-            if (datos.ejercicios != null && !datos.ejercicios.isEmpty()) {
+            if (datos.getEjercicios() != null && !datos.getEjercicios().isEmpty()) {
                 try {
                     String sqlDetalle = "INSERT INTO detalle_rutinas (id_rutina, id_ejercicio, series, repeticiones, descanso) VALUES (?, ?, ?, ?, ?)";
                     ps = conn.prepareStatement(sqlDetalle);
-                    for (EjercicioEnRutinaDTO e : datos.ejercicios) {
+                    for (EjercicioEnRutinaDTO e : datos.getEjercicios()) {
                         ps.setInt(1, idRutina);
                         ps.setInt(2, e.idEjercicio);
                         ps.setString(3, e.series != null ? e.series : "4");
@@ -164,7 +165,7 @@ public class EntrenadorDAO {
                     ps.executeBatch();
                 } catch (SQLException ex) {
                     ps = conn.prepareStatement("INSERT INTO detalle_rutinas (id_rutina, id_ejercicio, series, repeticiones) VALUES (?, ?, ?, ?)");
-                    for (EjercicioEnRutinaDTO e : datos.ejercicios) {
+                    for (EjercicioEnRutinaDTO e : datos.getEjercicios()) {
                         ps.setInt(1, idRutina);
                         ps.setInt(2, e.idEjercicio);
                         ps.setString(3, e.series != null ? e.series : "4");
@@ -173,11 +174,11 @@ public class EntrenadorDAO {
                     }
                     ps.executeBatch();
                 }
-            } else if (datos.idsEjercicios != null) {
+            } else if (datos.getIdsEjercicios() != null) {
                 String sqlDetalle = "INSERT INTO detalle_rutinas (id_rutina, id_ejercicio, series, repeticiones, descanso) VALUES (?, ?, '4', '12', ?)";
                 try {
                     ps = conn.prepareStatement(sqlDetalle);
-                    for (Integer idEjercicio : datos.idsEjercicios) {
+                    for (Integer idEjercicio : datos.getIdsEjercicios()) {
                         ps.setInt(1, idRutina);
                         ps.setInt(2, idEjercicio);
                         ps.setString(3, "60 seg");
@@ -187,7 +188,7 @@ public class EntrenadorDAO {
                 } catch (SQLException ex) {
                     sqlDetalle = "INSERT INTO detalle_rutinas (id_rutina, id_ejercicio, series, repeticiones) VALUES (?, ?, '4 Series', '12 Reps')";
                     ps = conn.prepareStatement(sqlDetalle);
-                    for (Integer idEjercicio : datos.idsEjercicios) {
+                    for (Integer idEjercicio : datos.getIdsEjercicios()) {
                         ps.setInt(1, idRutina);
                         ps.setInt(2, idEjercicio);
                         ps.addBatch();
@@ -272,8 +273,8 @@ public class EntrenadorDAO {
             // 1. Cambiamos los datos principales.
             String sqlUpdate = "UPDATE rutinas SET nombre_rutina = ?, id_cliente = ? WHERE id_rutina = ?";
             PreparedStatement ps = conn.prepareStatement(sqlUpdate);
-            ps.setString(1, datos.nombreRutina);
-            ps.setInt(2, datos.idCliente);
+            ps.setString(1, datos.getNombreRutina());
+            ps.setInt(2, datos.getIdCliente());
             ps.setInt(3, idRutina);
             ps.executeUpdate();
 
@@ -283,11 +284,11 @@ public class EntrenadorDAO {
             ps.executeUpdate();
 
             // 3. Insertamos ejercicios
-            if (datos.ejercicios != null && !datos.ejercicios.isEmpty()) {
+            if (datos.getEjercicios() != null && !datos.getEjercicios().isEmpty()) {
                 String sqlDetalle = "INSERT INTO detalle_rutinas (id_rutina, id_ejercicio, series, repeticiones, descanso) VALUES (?, ?, ?, ?, ?)";
                 try {
                     ps = conn.prepareStatement(sqlDetalle);
-                    for (EjercicioEnRutinaDTO e : datos.ejercicios) {
+                    for (EjercicioEnRutinaDTO e : datos.getEjercicios()) {
                         ps.setInt(1, idRutina);
                         ps.setInt(2, e.idEjercicio);
                         ps.setString(3, e.series != null ? e.series : "4");
@@ -299,7 +300,7 @@ public class EntrenadorDAO {
                 } catch (SQLException sqle) {
                     sqlDetalle = "INSERT INTO detalle_rutinas (id_rutina, id_ejercicio, series, repeticiones) VALUES (?, ?, ?, ?)";
                     ps = conn.prepareStatement(sqlDetalle);
-                    for (EjercicioEnRutinaDTO e : datos.ejercicios) {
+                    for (EjercicioEnRutinaDTO e : datos.getEjercicios()) {
                         ps.setInt(1, idRutina);
                         ps.setInt(2, e.idEjercicio);
                         ps.setString(3, e.series != null ? e.series : "4");
@@ -308,10 +309,10 @@ public class EntrenadorDAO {
                     }
                     ps.executeBatch();
                 }
-            } else if (datos.idsEjercicios != null) {
+            } else if (datos.getIdsEjercicios() != null) {
                 String sqlDetalle = "INSERT INTO detalle_rutinas (id_rutina, id_ejercicio, series, repeticiones) VALUES (?, ?, '4 Series', '12 Reps')";
                 ps = conn.prepareStatement(sqlDetalle);
-                for (Integer idEjercicio : datos.idsEjercicios) {
+                for (Integer idEjercicio : datos.getIdsEjercicios()) {
                     ps.setInt(1, idRutina);
                     ps.setInt(2, idEjercicio);
                     ps.addBatch();
@@ -321,7 +322,7 @@ public class EntrenadorDAO {
 
             // 4. Si editamos la rutina, reseteamos el historial de hoy para que el alumno pueda marcarla otra vez.
             ps = conn.prepareStatement("DELETE FROM historial_entrenamientos WHERE id_cliente = ? AND fecha = CURRENT_DATE");
-            ps.setInt(1, datos.idCliente);
+            ps.setInt(1, datos.getIdCliente());
             ps.executeUpdate();
 
             conn.commit();
@@ -371,11 +372,11 @@ public class EntrenadorDAO {
                 if (!first) json.append(",");
                 json.append("{\"idEntrenador\":").append(rs.getInt("id_entrenador"))
                         .append(",\"idUsuario\":").append(rs.getInt("id_usuario"))
-                        .append(",\"nombre\":\"").append(escape(rs.getString("nombre")))
-                        .append("\",\"apellido\":\"").append(escape(rs.getString("apellido")))
-                        .append("\",\"email\":\"").append(escape(rs.getString("email")))
-                        .append("\",\"usuario\":\"").append(escape(rs.getString("usuario")))
-                        .append("\",\"especialidad\":\"").append(escape(rs.getString("especialidad")))
+                        .append(",\"nombre\":\"").append(JsonUtil.escape(rs.getString("nombre")))
+                        .append("\",\"apellido\":\"").append(JsonUtil.escape(rs.getString("apellido")))
+                        .append("\",\"email\":\"").append(JsonUtil.escape(rs.getString("email")))
+                        .append("\",\"usuario\":\"").append(JsonUtil.escape(rs.getString("usuario")))
+                        .append("\",\"especialidad\":\"").append(JsonUtil.escape(rs.getString("especialidad")))
                         .append("\",\"activo\":").append(rs.getBoolean("activo")).append("}");
                 first = false;
             }
@@ -396,12 +397,12 @@ public class EntrenadorDAO {
             if (rs.next()) {
                 return "{\"idEntrenador\":" + rs.getInt("id_entrenador") +
                         ",\"idUsuario\":" + rs.getInt("id_usuario") +
-                        ",\"nombre\":\"" + escape(rs.getString("nombre")) + "\"" +
-                        ",\"apellido\":\"" + escape(rs.getString("apellido")) + "\"" +
-                        ",\"email\":\"" + escape(rs.getString("email")) + "\"" +
-                        ",\"usuario\":\"" + escape(rs.getString("usuario")) + "\"" +
-                        ",\"especialidad\":\"" + escape(rs.getString("especialidad")) + "\"" +
-                        ",\"notasDesempeno\":\"" + escape(rs.getString("notas_desempeno")) + "\"" +
+                        ",\"nombre\":\"" + JsonUtil.escape(rs.getString("nombre")) + "\"" +
+                        ",\"apellido\":\"" + JsonUtil.escape(rs.getString("apellido")) + "\"" +
+                        ",\"email\":\"" + JsonUtil.escape(rs.getString("email")) + "\"" +
+                        ",\"usuario\":\"" + JsonUtil.escape(rs.getString("usuario")) + "\"" +
+                        ",\"especialidad\":\"" + JsonUtil.escape(rs.getString("especialidad")) + "\"" +
+                        ",\"notasDesempeno\":\"" + JsonUtil.escape(rs.getString("notas_desempeno")) + "\"" +
                         ",\"activo\":" + rs.getBoolean("activo") + "}";
             }
         } catch (Exception e) {
@@ -500,7 +501,4 @@ public class EntrenadorDAO {
         }
     }
 
-    private static String escape(String s) {
-        return s != null ? s.replace("\\", "\\\\").replace("\"", "\\\"") : "";
-    }
 }

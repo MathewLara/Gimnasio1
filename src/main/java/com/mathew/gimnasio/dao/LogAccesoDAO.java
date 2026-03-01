@@ -1,6 +1,7 @@
 package com.mathew.gimnasio.dao;
 
 import com.mathew.gimnasio.configuracion.ConexionDB;
+import com.mathew.gimnasio.util.JsonUtil;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -50,11 +51,11 @@ public class LogAccesoDAO {
                 json.append("{")
                         .append("\"idLog\":").append(rs.getInt("id_log")).append(",")
                         .append("\"idUsuario\":").append(rs.getInt("id_usuario")).append(",")
-                        .append("\"usuario\":\"").append(escape(rs.getString("usuario"))).append("\",")
-                        .append("\"rol\":\"").append(escape(rs.getString("nombre_rol"))).append("\",")
+                        .append("\"usuario\":\"").append(JsonUtil.escape(rs.getString("usuario"))).append("\",")
+                        .append("\"rol\":\"").append(JsonUtil.escape(rs.getString("nombre_rol"))).append("\",")
                         .append("\"fechaHora\":\"").append(rs.getTimestamp("fecha_hora_log")).append("\",")
-                        .append("\"ip\":\"").append(escape(rs.getString("direccion_ip"))).append("\",")
-                        .append("\"dispositivo\":\"").append(escape(rs.getString("tipo_dispositivo"))).append("\",")
+                        .append("\"ip\":\"").append(JsonUtil.escape(rs.getString("direccion_ip"))).append("\",")
+                        .append("\"dispositivo\":\"").append(JsonUtil.escape(rs.getString("tipo_dispositivo"))).append("\",")
                         .append("\"exitoso\":").append(rs.getBoolean("exitoso"))
                         .append("}");
                 first = false;
@@ -66,7 +67,4 @@ public class LogAccesoDAO {
         return json.toString();
     }
 
-    private static String escape(String s) {
-        return s != null ? s.replace("\\", "\\\\").replace("\"", "\\\"") : "";
-    }
 }

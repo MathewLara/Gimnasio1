@@ -1,6 +1,7 @@
 package com.mathew.gimnasio.dao;
 
 import com.mathew.gimnasio.configuracion.ConexionDB;
+import com.mathew.gimnasio.util.JsonUtil;
 
 import java.sql.*;
 import java.util.ArrayList;
@@ -86,9 +87,9 @@ public class ClienteDAO {
                         .append("\"idPago\":").append(rs.getInt("id_pago")).append(",")
                         .append("\"fecha\":\"").append(rs.getTimestamp("fecha_pago")).append("\",")
                         .append("\"monto\":").append(rs.getDouble("monto_pagado")).append(",")
-                        .append("\"metodo\":\"").append(escape(rs.getString("metodo_pago"))).append("\",")
-                        .append("\"referencia\":\"").append(escape(rs.getString("referencia_comprobante"))).append("\",")
-                        .append("\"membresia\":\"").append(escape(rs.getString("membresia"))).append("\"")
+                        .append("\"metodo\":\"").append(JsonUtil.escape(rs.getString("metodo_pago"))).append("\",")
+                        .append("\"referencia\":\"").append(JsonUtil.escape(rs.getString("referencia_comprobante"))).append("\",")
+                        .append("\"membresia\":\"").append(JsonUtil.escape(rs.getString("membresia"))).append("\"")
                         .append("}");
                 first = false;
             }
@@ -118,8 +119,8 @@ public class ClienteDAO {
                         .append("\"idPago\":").append(rs.getInt("id_pago")).append(",")
                         .append("\"fecha\":\"").append(rs.getTimestamp("fecha_pago")).append("\",")
                         .append("\"monto\":").append(rs.getDouble("monto_pagado")).append(",")
-                        .append("\"metodo\":\"").append(escape(rs.getString("metodo_pago"))).append("\",")
-                        .append("\"numeroFactura\":\"").append(escape(rs.getString("numero_factura"))).append("\"")
+                        .append("\"metodo\":\"").append(JsonUtil.escape(rs.getString("metodo_pago"))).append("\",")
+                        .append("\"numeroFactura\":\"").append(JsonUtil.escape(rs.getString("numero_factura"))).append("\"")
                         .append("}");
                 first = false;
             }
@@ -132,7 +133,4 @@ public class ClienteDAO {
         return json.toString();
     }
 
-    private static String escape(String s) {
-        return s != null ? s.replace("\\", "\\\\").replace("\"", "\\\"") : "";
-    }
 }

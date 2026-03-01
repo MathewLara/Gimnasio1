@@ -2,6 +2,8 @@ package com.mathew.gimnasio.dao;
 
 import com.mathew.gimnasio.configuracion.ConexionDB;
 import com.mathew.gimnasio.modelos.SolicitudVenta;
+import com.mathew.gimnasio.util.JsonUtil;
+
 import java.sql.*;
 
 /**
@@ -150,7 +152,7 @@ public class VentaDAO {
             boolean first = true;
             while (rsDet.next()) {
                 if (!first) json.append(",");
-                json.append("{\"descripcion\":\"").append(rsDet.getString("descripcion").replace("\"", "\\\""))
+                json.append("{\"descripcion\":\"").append(JsonUtil.escape(rsDet.getString("descripcion")))
                         .append("\",\"cantidad\":").append(rsDet.getInt("cantidad"))
                         .append(",\"precioUnitario\":").append(rsDet.getDouble("precio_unitario"))
                         .append(",\"subtotal\":").append(rsDet.getDouble("subtotal_linea")).append("}");

@@ -2,6 +2,7 @@ package com.mathew.gimnasio.controladores;
 
 import com.mathew.gimnasio.configuracion.ConexionDB;
 import com.mathew.gimnasio.modelos.AccesoManualDTO;
+import com.mathew.gimnasio.util.JsonUtil;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -294,8 +295,8 @@ public class AsistenciaController {
                 json.append("{")
                         .append("\"idAsistencia\": ").append(rs.getInt("id_asistencia")).append(", ")
                         .append("\"idCliente\": ").append(rs.getInt("id_cliente")).append(", ")
-                        .append("\"nombre\": \"").append(escape(rs.getString("nombre_completo"))).append("\", ")
-                        .append("\"plan\": \"").append(escape(rs.getString("plan"))).append("\", ")
+                        .append("\"nombre\": \"").append(JsonUtil.escape(rs.getString("nombre_completo"))).append("\", ")
+                        .append("\"plan\": \"").append(JsonUtil.escape(rs.getString("plan"))).append("\", ")
                         .append("\"horaIngreso\": \"").append(rs.getString("hora_ingreso")).append("\", ")
                         .append("\"minutosEnGimnasio\": ").append((int) rs.getDouble("minutos"))
                         .append("}");
@@ -405,27 +406,21 @@ public class AsistenciaController {
                     ).build();
                 }
 
-                // Insertar entrada manual con nota del motivo
-                PreparedStatement psIns = conn.prepareStatement(
-                        "INSERT INTO asistencias (id_cliente, fecha_hora_ingreso, observacion) " +
-                                "VALUES (?, CURRENT_TIMESTAMP, ?) RETURNING id_asistencia",
-                        new String[]{"id_asistencia"}
-                );
-                psIns.setInt(1, dto.getIdCliente());
-                psIns.setString(2, "[MANUAL] " + motivo);
-
+                // Insertar entrada manual (con observacion si existe columna; ver migracion_rf.sql)
                 try {
-                    // Intentamos con columna observacion (si existe en la tabla)
+                    PreparedStatement psIns = conn.prepareStatement(
+                            "INSERT INTO asistencias (id_cliente, fecha_hora_ingreso, observacion) " +
+                                    "VALUES (?, CURRENT_TIMESTAMP, ?) RETURNING id_asistencia");
+                    psIns.setInt(1, dto.getIdCliente());
+                    psIns.setString(2, "[MANUAL] " + motivo);
                     ResultSet rsGen = psIns.executeQuery();
                     if (rsGen.next()) idAsistenciaResultante = rsGen.getInt(1);
                 } catch (Exception ex) {
-                    // Si la columna 'observacion' no existe, insertamos sin ella
-                    PreparedStatement psInsSin = conn.prepareStatement(
+                    PreparedStatement psIns = conn.prepareStatement(
                             "INSERT INTO asistencias (id_cliente, fecha_hora_ingreso) " +
-                                    "VALUES (?, CURRENT_TIMESTAMP) RETURNING id_asistencia"
-                    );
-                    psInsSin.setInt(1, dto.getIdCliente());
-                    ResultSet rsGen = psInsSin.executeQuery();
+                                    "VALUES (?, CURRENT_TIMESTAMP) RETURNING id_asistencia");
+                    psIns.setInt(1, dto.getIdCliente());
+                    ResultSet rsGen = psIns.executeQuery();
                     if (rsGen.next()) idAsistenciaResultante = rsGen.getInt(1);
                 }
 
@@ -461,7 +456,7 @@ public class AsistenciaController {
                     "{\"mensaje\": \"" + emoji + " " + tipo.toUpperCase() + " manual registrada para " + nombre + "\", " +
                             "\"tipo\": \"" + tipo.toUpperCase() + "\", " +
                             "\"idAsistencia\": " + idAsistenciaResultante + ", " +
-                            "\"motivo\": \"" + escape(motivo) + "\"}"
+                            "\"motivo\": \"" + JsonUtil.escape(motivo) + "\"}"
             ).build();
 
         } catch (Exception e) {
@@ -574,7 +569,7 @@ public class AsistenciaController {
                 if (!first) movimientos.append(",");
                 String sal = rsMov.getString("salida");
                 movimientos.append("{\"idAsistencia\":").append(rsMov.getInt("id_asistencia"))
-                        .append(",\"nombre\":\"").append(escape(rsMov.getString("nombre")))
+                        .append(",\"nombre\":\"").append(JsonUtil.escape(rsMov.getString("nombre")))
                         .append("\",\"entrada\":\"").append(rsMov.getString("entrada"))
                         .append("\",\"salida\":").append(sal != null ? "\"" + sal + "\"" : "null").append("}");
                 first = false;
@@ -700,10 +695,4 @@ public class AsistenciaController {
         }
     }
 
-    // ================================================================
-    // HELPER — Escapar caracteres especiales en JSON manual
-    // ================================================================
-    private static String escape(String s) {
-        return s != null ? s.replace("\\", "\\\\").replace("\"", "\\\"") : "";
-    }
 }

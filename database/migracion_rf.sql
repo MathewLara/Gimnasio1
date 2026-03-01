@@ -9,3 +9,6 @@ ALTER TABLE factura_encabezados ADD COLUMN IF NOT EXISTS id_cliente INTEGER REFE
 
 -- 3. descanso en detalle_rutinas (RF05 - series, reps, descanso)
 ALTER TABLE detalle_rutinas ADD COLUMN IF NOT EXISTS descanso VARCHAR(50);
+
+-- 4. observacion en asistencias (motivo en registro manual POST /accesos/manual)
+ALTER TABLE asistencias ADD COLUMN IF NOT EXISTS observacion VARCHAR(255);
