@@ -1,15 +1,25 @@
-# Paso 1: Usar Maven para compilar el proyecto
 FROM maven:3.8.5-openjdk-17 AS build
-COPY . .
-RUN mvn clean package -DskipTests
 
-# Paso 2: Usar WildFly para ejecutar la aplicación
-FROM quay.io/wildfly/wildfly:latest
-# Copiamos el archivo .war generado por Maven y lo RENOMBRAMOS a Gimnasio.war
-COPY --from=build target/*.war /opt/jboss/wildfly/standalone/deployments/Gimnasio.war
+WORKDIR /app
 
-# Exponemos el puerto 8080 que es el que usa WildFly por defecto
+# Copiamos solo lo necesario para aprovechar la cache de Docker
+COPY pom.xml .
+COPY src ./src
+
+# Compilamos el proyecto y generamos el WAR
+RUN mvn -q clean package -DskipTests
+
+# Imagen final con Tomcat 10 (Jakarta / Servlet 5)
+FROM tomcat:10.1-jdk17-temurin
+
+# Limpiamos las apps por defecto de Tomcat
+RUN rm -rf /usr/local/tomcat/webapps/*
+
+# Copiamos el WAR generado y lo desplegamos como ROOT.war
+COPY --from=build /app/target/*.war /usr/local/tomcat/webapps/ROOT.war
+
+# Tomcat escucha en el 8080 por defecto
 EXPOSE 8080
 
-# Comando para iniciar WildFly
-CMD ["/opt/jboss/wildfly/bin/standalone.sh", "-b", "0.0.0.0"]
+# Comando para iniciar Tomcat
+CMD ["catalina.sh", "run"]
