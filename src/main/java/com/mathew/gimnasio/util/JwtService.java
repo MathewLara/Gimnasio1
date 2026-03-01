@@ -1,5 +1,6 @@
 package com.mathew.gimnasio.util;
 
+import com.mathew.gimnasio.configuracion.ConfiguracionEnv;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -9,21 +10,24 @@ import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
 /**
- * SERVICIO JWT (RF02)
- * Genera y valida tokens JWT para autorizar el acceso a endpoints protegidos.
+ * Servicio JWT. Clave desde variable de entorno JWT_SECRET (mín. 32 caracteres).
  */
 public class JwtService {
 
-    private static final String SECRET = "GimnasioAPI2026SecretKeyParaJWT_Minimo32Caracteres";
+    private static final String SECRET_DEFAULT = "GimnasioAPI2026SecretKeyParaJWT_Minimo32Caracteres";
     private static final long EXPIRATION_MS = 24 * 60 * 60 * 1000; // 24 horas
 
     private static SecretKey getKey() {
-        return Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8));
+        String secret = ConfiguracionEnv.get("JWT_SECRET", SECRET_DEFAULT);
+        if (SECRET_DEFAULT.equals(secret))
+            System.err.println("Advertencia: JWT_SECRET no configurado; usando valor por defecto (no usar en producción).");
+        byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
+        if (keyBytes.length < 32) {
+            throw new IllegalStateException("JWT_SECRET debe tener al menos 32 caracteres");
+        }
+        return Keys.hmacShaKeyFor(keyBytes);
     }
 
-    /**
-     * Genera un JWT con idUsuario, idRol y usuario (username).
-     */
     public static String generarToken(int idUsuario, int idRol, String usuario) {
         return Jwts.builder()
                 .subject(String.valueOf(idUsuario))
@@ -35,9 +39,6 @@ public class JwtService {
                 .compact();
     }
 
-    /**
-     * Valida el token y devuelve los Claims. Lanza excepción si es inválido o expirado.
-     */
     public static Claims validarToken(String token) {
         return Jwts.parser()
                 .verifyWith(getKey())
@@ -46,9 +47,6 @@ public class JwtService {
                 .getPayload();
     }
 
-    /**
-     * Extrae el Bearer token del header Authorization.
-     */
     public static String extraerToken(String authHeader) {
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             return authHeader.substring(7);

@@ -37,95 +37,82 @@ public class AsistenciaController {
         String mensaje = "";
         String tipo = "";
         String alerta = "";
-        boolean puedeEntrar = true;
 
         try (Connection conn = ConexionDB.getConnection()) {
-
-            // 1. TRADUCCIÓN DE ID + DATOS DE MEMBRESÍA
-            // Ahora también traemos el estado de membresía para validar el acceso
-            String sqlCliente =
-                    "SELECT c.id_cliente, c.nombre, c.fecha_vencimiento, " +
-                            "CASE WHEN c.fecha_vencimiento >= CURRENT_DATE THEN 'Activo' ELSE 'Vencido' END as estado, " +
-                            "CURRENT_DATE - c.fecha_vencimiento as dias_vencido, " +
-                            "c.fecha_vencimiento - CURRENT_DATE as dias_restantes " +
-                            "FROM clientes c WHERE c.id_usuario = ?";
-
-            PreparedStatement psCl = conn.prepareStatement(sqlCliente);
-            psCl.setInt(1, idUsuario);
-            ResultSet rsCl = psCl.executeQuery();
-
-            int idCliente = 0;
-            String nombre = "";
-
-            if (rsCl.next()) {
-                idCliente = rsCl.getInt("id_cliente");
-                nombre = rsCl.getString("nombre");
-                String estadoMembresia = rsCl.getString("estado");
-                int diasRestantes = rsCl.getInt("dias_restantes");
-                int diasVencido = rsCl.getInt("dias_vencido");
-
-                // VALIDACIÓN DE MEMBRESÍA: Si está vencida, bloqueamos la entrada
-                if ("Vencido".equals(estadoMembresia)) {
-                    puedeEntrar = false;
-                    return Response.status(403).entity(
-                            "{\"mensaje\": \"❌ Acceso denegado, " + nombre + ". Tu membresía venció hace " + diasVencido + " día(s).\", " +
-                                    "\"tipo\": \"DENEGADO\", " +
-                                    "\"puedeEntrar\": false, " +
-                                    "\"alerta\": \"Membresía vencida. Dirígete a recepción para renovar.\"}"
-                    ).build();
-                }
-
-                // ALERTA: Membresía por vencer en los próximos 5 días
-                if (diasRestantes >= 0 && diasRestantes <= 5) {
-                    alerta = "⚠️ Tu membresía vence en " + diasRestantes + " día(s). ¡Renueva pronto!";
-                }
-
-            } else {
-                return Response.status(404)
-                        .entity("{\"mensaje\": \"Usuario no encontrado en clientes\"}")
-                        .build();
+            if (conn == null) {
+                return Response.status(500).entity("{\"mensaje\": \"Error de conexión\"}").build();
             }
 
-            // 2. VERIFICAR ESTADO ACTUAL (¿ya tiene entrada abierta hoy?)
-            String sqlCheck =
+            int idCliente;
+            String nombre;
+            int diasVencido = 0;
+            int diasRestantes = 0;
+
+            try (PreparedStatement psCl = conn.prepareStatement(
+                    "SELECT c.id_cliente, c.nombre, c.fecha_vencimiento, " +
+                            "CASE WHEN c.fecha_vencimiento >= CURRENT_DATE THEN 'Activo' ELSE 'Vencido' END as estado, " +
+                            "COALESCE(CURRENT_DATE - c.fecha_vencimiento, 0) as dias_vencido, " +
+                            "COALESCE(c.fecha_vencimiento - CURRENT_DATE, 0) as dias_restantes " +
+                            "FROM clientes c WHERE c.id_usuario = ?")) {
+                psCl.setInt(1, idUsuario);
+                try (ResultSet rsCl = psCl.executeQuery()) {
+                    if (!rsCl.next()) {
+                        return Response.status(404).entity("{\"mensaje\": \"Usuario no encontrado en clientes\"}").build();
+                    }
+                    idCliente = rsCl.getInt("id_cliente");
+                    nombre = rsCl.getString("nombre");
+                    String estadoMembresia = rsCl.getString("estado");
+                    diasRestantes = rsCl.getInt("dias_restantes");
+                    diasVencido = rsCl.getInt("dias_vencido");
+
+                    if ("Vencido".equals(estadoMembresia)) {
+                        String msgEscapado = JsonUtil.escape("❌ Acceso denegado, " + nombre + ". Tu membresía venció hace " + diasVencido + " día(s).");
+                        String alertaEscapado = JsonUtil.escape("Membresía vencida. Dirígete a recepción para renovar.");
+                        return Response.status(403).entity(
+                                "{\"mensaje\": \"" + msgEscapado + "\", " +
+                                        "\"tipo\": \"DENEGADO\", " +
+                                        "\"puedeEntrar\": false, " +
+                                        "\"alerta\": \"" + alertaEscapado + "\"}"
+                        ).build();
+                    }
+                    if (diasRestantes >= 0 && diasRestantes <= 5) {
+                        alerta = "⚠️ Tu membresía vence en " + diasRestantes + " día(s). ¡Renueva pronto!";
+                    }
+                }
+            }
+
+            try (PreparedStatement psCheck = conn.prepareStatement(
                     "SELECT id_asistencia FROM asistencias " +
                             "WHERE id_cliente = ? AND fecha_hora_salida IS NULL " +
                             "AND DATE(fecha_hora_ingreso) = CURRENT_DATE " +
-                            "ORDER BY id_asistencia DESC LIMIT 1";
-
-            PreparedStatement psCheck = conn.prepareStatement(sqlCheck);
-            psCheck.setInt(1, idCliente);
-            ResultSet rs = psCheck.executeQuery();
-
-            if (rs.next()) {
-                // CASO A: MARCAR SALIDA
-                int idAsistencia = rs.getInt("id_asistencia");
-                String sqlSalida =
-                        "UPDATE asistencias SET fecha_hora_salida = CURRENT_TIMESTAMP " +
-                                "WHERE id_asistencia = ?";
-                PreparedStatement psUpd = conn.prepareStatement(sqlSalida);
-                psUpd.setInt(1, idAsistencia);
-                psUpd.executeUpdate();
-
-                mensaje = "👋 ¡Hasta luego, " + nombre + "!";
-                tipo = "SALIDA";
-            } else {
-                // CASO B: MARCAR ENTRADA
-                String sqlEntrada =
-                        "INSERT INTO asistencias (id_cliente, fecha_hora_ingreso) " +
-                                "VALUES (?, CURRENT_TIMESTAMP)";
-                PreparedStatement psIns = conn.prepareStatement(sqlEntrada);
-                psIns.setInt(1, idCliente);
-                psIns.executeUpdate();
-
-                mensaje = "🚀 ¡Bienvenido, " + nombre + "!";
-                tipo = "ENTRADA";
+                            "ORDER BY id_asistencia DESC LIMIT 1")) {
+                psCheck.setInt(1, idCliente);
+                try (ResultSet rs = psCheck.executeQuery()) {
+                    if (rs.next()) {
+                        int idAsistencia = rs.getInt("id_asistencia");
+                        try (PreparedStatement psUpd = conn.prepareStatement(
+                                "UPDATE asistencias SET fecha_hora_salida = CURRENT_TIMESTAMP WHERE id_asistencia = ?")) {
+                            psUpd.setInt(1, idAsistencia);
+                            psUpd.executeUpdate();
+                        }
+                        mensaje = "👋 ¡Hasta luego, " + nombre + "!";
+                        tipo = "SALIDA";
+                    } else {
+                        try (PreparedStatement psIns = conn.prepareStatement(
+                                "INSERT INTO asistencias (id_cliente, fecha_hora_ingreso) VALUES (?, CURRENT_TIMESTAMP)")) {
+                            psIns.setInt(1, idCliente);
+                            psIns.executeUpdate();
+                        }
+                        mensaje = "🚀 ¡Bienvenido, " + nombre + "!";
+                        tipo = "ENTRADA";
+                    }
+                }
             }
 
-            // Construimos la respuesta con alerta incluida (puede ser vacía)
-            String alertaJson = alerta.isEmpty() ? "null" : "\"" + alerta + "\"";
+            String mensajeEscapado = JsonUtil.escape(mensaje);
+            String alertaJson = alerta.isEmpty() ? "null" : "\"" + JsonUtil.escape(alerta) + "\"";
             return Response.ok(
-                    "{\"mensaje\": \"" + mensaje + "\", " +
+                    "{\"mensaje\": \"" + mensajeEscapado + "\", " +
                             "\"tipo\": \"" + tipo + "\", " +
                             "\"puedeEntrar\": true, " +
                             "\"alerta\": " + alertaJson + "}"
@@ -133,9 +120,7 @@ public class AsistenciaController {
 
         } catch (Exception e) {
             e.printStackTrace();
-            return Response.status(500)
-                    .entity("{\"mensaje\": \"Error interno\"}")
-                    .build();
+            return Response.status(500).entity("{\"mensaje\": \"Error interno\"}").build();
         }
     }
 
@@ -169,63 +154,66 @@ public class AsistenciaController {
     @Produces(MediaType.APPLICATION_JSON)
     public Response verificarEstado(@PathParam("idUsuario") int idUsuario) {
         try (Connection conn = ConexionDB.getConnection()) {
-
-            // Traemos perfil completo + membresía del cliente
+            if (conn == null) {
+                return Response.status(500).entity("{\"mensaje\": \"Error de conexión\"}").build();
+            }
+            int idCliente;
+            String nombre, plan, fechaVenc, estado;
+            int diasRestantes;
+            boolean puedeEntrar;
             String sql =
                     "SELECT c.id_cliente, c.nombre || ' ' || c.apellido as nombre_completo, " +
                             "m.nombre as plan, c.fecha_vencimiento, " +
                             "CASE WHEN c.fecha_vencimiento >= CURRENT_DATE THEN 'Activo' ELSE 'Vencido' END as estado, " +
-                            "c.fecha_vencimiento - CURRENT_DATE as dias_restantes " +
+                            "COALESCE(c.fecha_vencimiento - CURRENT_DATE, 0) as dias_restantes " +
                             "FROM clientes c " +
                             "LEFT JOIN membresias m ON c.id_membresia = m.id_membresia " +
                             "WHERE c.id_usuario = ?";
-
-            PreparedStatement ps = conn.prepareStatement(sql);
-            ps.setInt(1, idUsuario);
-            ResultSet rs = ps.executeQuery();
-
-            if (!rs.next()) {
-                return Response.status(404)
-                        .entity("{\"mensaje\": \"Cliente no encontrado\"}")
-                        .build();
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setInt(1, idUsuario);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        return Response.status(404).entity("{\"mensaje\": \"Cliente no encontrado\"}").build();
+                    }
+                    idCliente = rs.getInt("id_cliente");
+                    nombre = rs.getString("nombre_completo");
+                    plan = rs.getString("plan") != null ? rs.getString("plan") : "Sin Membresía";
+                    fechaVenc = rs.getString("fecha_vencimiento");
+                    estado = rs.getString("estado");
+                    diasRestantes = rs.getInt("dias_restantes");
+                    puedeEntrar = "Activo".equals(estado);
+                }
             }
 
-            int idCliente      = rs.getInt("id_cliente");
-            String nombre      = rs.getString("nombre_completo");
-            String plan        = rs.getString("plan") != null ? rs.getString("plan") : "Sin Membresía";
-            String fechaVenc   = rs.getString("fecha_vencimiento");
-            String estado      = rs.getString("estado");
-            int diasRestantes  = rs.getInt("dias_restantes");
-            boolean puedeEntrar = "Activo".equals(estado);
-
-            // ¿Ya está dentro hoy? (entrada sin salida)
-            PreparedStatement psCheck = conn.prepareStatement(
+            boolean dentroPorDia;
+            try (PreparedStatement psCheck = conn.prepareStatement(
                     "SELECT 1 FROM asistencias " +
                             "WHERE id_cliente = ? AND fecha_hora_salida IS NULL " +
-                            "AND DATE(fecha_hora_ingreso) = CURRENT_DATE LIMIT 1"
-            );
-            psCheck.setInt(1, idCliente);
-            ResultSet rsCheck = psCheck.executeQuery();
-            boolean dentroPorDia = rsCheck.next();
-
-            // Construir alerta según contexto
-            String alerta = "null";
-            if (!puedeEntrar) {
-                alerta = "\"Membresía vencida. Renovar en recepción.\"";
-            } else if (diasRestantes <= 5) {
-                alerta = "\"⚠️ Membresía vence en " + diasRestantes + " día(s)\"";
+                            "AND DATE(fecha_hora_ingreso) = CURRENT_DATE LIMIT 1")) {
+                psCheck.setInt(1, idCliente);
+                try (ResultSet rsCheck = psCheck.executeQuery()) {
+                    dentroPorDia = rsCheck.next();
+                }
             }
+
+            String alertaVal = null;
+            if (!puedeEntrar) {
+                alertaVal = "Membresía vencida. Renovar en recepción.";
+            } else if (diasRestantes <= 5) {
+                alertaVal = "⚠️ Membresía vence en " + diasRestantes + " día(s)";
+            }
+            String alertaJson = alertaVal == null ? "null" : "\"" + JsonUtil.escape(alertaVal) + "\"";
 
             return Response.ok(
                     "{" +
-                            "\"nombre\": \"" + nombre + "\", " +
-                            "\"estadoMembresia\": \"" + estado + "\", " +
-                            "\"plan\": \"" + plan + "\", " +
-                            "\"fechaVencimiento\": \"" + (fechaVenc != null ? fechaVenc : "") + "\", " +
+                            "\"nombre\": \"" + JsonUtil.escape(nombre) + "\", " +
+                            "\"estadoMembresia\": \"" + JsonUtil.escape(estado) + "\", " +
+                            "\"plan\": \"" + JsonUtil.escape(plan) + "\", " +
+                            "\"fechaVencimiento\": \"" + JsonUtil.escape(fechaVenc != null ? fechaVenc : "") + "\", " +
                             "\"diasRestantes\": " + diasRestantes + ", " +
                             "\"puedeEntrar\": " + puedeEntrar + ", " +
                             "\"dentroPorDia\": " + dentroPorDia + ", " +
-                            "\"alerta\": " + alerta +
+                            "\"alerta\": " + alertaJson +
                             "}"
             ).build();
 
@@ -481,8 +469,10 @@ public class AsistenciaController {
     @Path("/historial/{idCliente}")
     @Produces(MediaType.APPLICATION_JSON)
     public Response getHistorialCliente(@PathParam("idCliente") int idCliente,
-                                        @QueryParam("limite") Integer limite) {
+                                        @QueryParam("limite") Integer limite,
+                                        @QueryParam("offset") Integer offset) {
         int lim = (limite != null && limite > 0) ? Math.min(limite, 200) : 50;
+        int off = (offset != null && offset >= 0) ? offset : 0;
         StringBuilder json = new StringBuilder("[");
 
         try (Connection conn = ConexionDB.getConnection()) {
@@ -492,10 +482,11 @@ public class AsistenciaController {
                             "to_char(a.fecha_hora_ingreso, 'HH24:MI') as hora_entrada, " +
                             "to_char(a.fecha_hora_salida, 'HH24:MI') as hora_salida " +
                             "FROM asistencias a WHERE a.id_cliente = ? " +
-                            "ORDER BY a.fecha_hora_ingreso DESC LIMIT ?";
+                            "ORDER BY a.fecha_hora_ingreso DESC LIMIT ? OFFSET ?";
             PreparedStatement ps = conn.prepareStatement(sql);
             ps.setInt(1, idCliente);
             ps.setInt(2, lim);
+            ps.setInt(3, off);
             ResultSet rs = ps.executeQuery();
 
             boolean first = true;

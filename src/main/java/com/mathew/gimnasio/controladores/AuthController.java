@@ -72,9 +72,9 @@ public class AuthController {
             return error("El teléfono debe tener por lo menos 9 dígitos numéricos.");
         }
 
-        // 4. Validar Contraseña (mínimo 6 caracteres)
-        if (u.getContrasena() == null || u.getContrasena().length() < 6) {
-            return error("La contraseña debe tener al menos 6 caracteres por seguridad.");
+        // 4. Validar Contraseña (único criterio: mínimo 8 caracteres)
+        if (u.getContrasena() == null || u.getContrasena().length() < 8) {
+            return error("La contraseña debe tener al menos 8 caracteres por seguridad.");
         }
 
         // 5. Validar Email mediante Regex
@@ -113,10 +113,6 @@ public class AuthController {
             return error("El nombre de usuario NO puede tener espacios.");
         }
 
-        // 6. Validar Contraseña (duplicado preventivo, requiere mínimo 5)
-        if (u.getContrasena() == null || u.getContrasena().length() < 5) {
-            return error("La contraseña es muy débil. Debe tener mínimo 5 caracteres.");
-        }
 
         // ==========================================
         //  AQUÍ ESTÁ EL CAMBIO CLAVE (TRANSACCIÓN)
