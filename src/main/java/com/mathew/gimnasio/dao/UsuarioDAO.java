@@ -25,7 +25,8 @@ public class UsuarioDAO {
      * Este método es "atómico": intenta guardar datos en TRES tablas distintas
      * (usuarios, clientes y codigos_verificacion). Si alguna de las tres falla,
      * hace un "rollback" y deshace todo para evitar datos incompletos o corruptos.
-     * @param u El objeto Usuario con todos los datos del formulario.
+     * 
+     * @param u              El objeto Usuario con todos los datos del formulario.
      * @param codigoGenerado El código de 6 dígitos creado por el controlador.
      * @return true si las 3 inserciones fueron exitosas, false si hubo un error.
      */
@@ -52,7 +53,8 @@ public class UsuarioDAO {
             psUsuario.setString(3, SecurityUtil.encriptar(u.getContrasena())); // Encriptación vital
             psUsuario.setBoolean(4, false); // Nace inactivo hasta validar su correo
 
-            if (psUsuario.executeUpdate() == 0) throw new SQLException("Fallo al insertar usuario.");
+            if (psUsuario.executeUpdate() == 0)
+                throw new SQLException("Fallo al insertar usuario.");
 
             // Recuperamos el ID que la base de datos le asignó a este nuevo usuario
             rs = psUsuario.getGeneratedKeys();
@@ -69,18 +71,22 @@ public class UsuarioDAO {
 
             java.sql.Date fechaSql = null;
             if (u.getFechaNacimiento() != null && !u.getFechaNacimiento().isEmpty()) {
-                try { fechaSql = java.sql.Date.valueOf(u.getFechaNacimiento()); } catch (Exception e) {}
+                try {
+                    fechaSql = java.sql.Date.valueOf(u.getFechaNacimiento());
+                } catch (Exception e) {
+                }
             }
 
             // Usamos el idGenerado del paso A como llave foránea (FK) aquí
-            String sqlCliente = "INSERT INTO clientes (id_usuario, nombre, apellido, email, telefono, fecha_nacimiento) VALUES (?, ?, ?, ?, ?, ?)";
+            String sqlCliente = "INSERT INTO clientes (id_usuario, nombre, apellido, email, telefono, cedula, fecha_nacimiento) VALUES (?, ?, ?, ?, ?, ?, ?)";
             psCliente = conn.prepareStatement(sqlCliente);
             psCliente.setInt(1, idGenerado);
             psCliente.setString(2, nombre);
             psCliente.setString(3, apellido);
             psCliente.setString(4, emailLimpio);
             psCliente.setString(5, u.getTelefono());
-            psCliente.setDate(6, fechaSql);
+            psCliente.setString(6, u.getCedula());
+            psCliente.setDate(7, fechaSql);
 
             psCliente.executeUpdate();
 
@@ -100,15 +106,39 @@ public class UsuarioDAO {
         } catch (SQLException e) {
             e.printStackTrace();
             // Si algo falla, hacemos ROLLBACK: se cancela la transacción completa.
-            try { if (conn != null) conn.rollback(); } catch (SQLException ex) {}
+            try {
+                if (conn != null)
+                    conn.rollback();
+            } catch (SQLException ex) {
+            }
             return false;
         } finally {
             // Cerramos todos los recursos de memoria pase lo que pase
-            try { if (rs != null) rs.close(); } catch (Exception e) {}
-            try { if (psUsuario != null) psUsuario.close(); } catch (Exception e) {}
-            try { if (psCliente != null) psCliente.close(); } catch (Exception e) {}
-            try { if (psCodigo != null) psCodigo.close(); } catch (Exception e) {}
-            try { if (conn != null) conn.close(); } catch (Exception e) {}
+            try {
+                if (rs != null)
+                    rs.close();
+            } catch (Exception e) {
+            }
+            try {
+                if (psUsuario != null)
+                    psUsuario.close();
+            } catch (Exception e) {
+            }
+            try {
+                if (psCliente != null)
+                    psCliente.close();
+            } catch (Exception e) {
+            }
+            try {
+                if (psCodigo != null)
+                    psCodigo.close();
+            } catch (Exception e) {
+            }
+            try {
+                if (conn != null)
+                    conn.close();
+            } catch (Exception e) {
+            }
         }
     }
 
@@ -119,7 +149,8 @@ public class UsuarioDAO {
     /**
      * VALIDAR CÓDIGO DE CORREO
      * Busca al usuario por su email (sin importar si es cliente o entrenador),
-     * verifica si el código ingresado coincide y, de ser así, "quema" el código y activa la cuenta.
+     * verifica si el código ingresado coincide y, de ser así, "quema" el código y
+     * activa la cuenta.
      */
     public boolean validarCodigoPorEmail(String email, String codigoIngresado) {
         Connection conn = null;
@@ -142,8 +173,10 @@ public class UsuarioDAO {
             rs = ps.executeQuery();
 
             int idEncontrado = -1;
-            if (rs.next()) idEncontrado = rs.getInt("id_usuario");
-            rs.close(); ps.close();
+            if (rs.next())
+                idEncontrado = rs.getInt("id_usuario");
+            rs.close();
+            ps.close();
 
             if (idEncontrado == -1) {
                 System.out.println("ERROR: Email no registrado.");
@@ -176,8 +209,15 @@ public class UsuarioDAO {
                 verCodigosDeUsuario(idEncontrado);
             }
 
-        } catch (Exception e) { e.printStackTrace(); }
-        finally { try { if(conn!=null) conn.close(); } catch(Exception e){} }
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            try {
+                if (conn != null)
+                    conn.close();
+            } catch (Exception e) {
+            }
+        }
         return false;
     }
 
@@ -194,7 +234,9 @@ public class UsuarioDAO {
         try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, idUsuario);
             return ps.executeUpdate() > 0;
-        } catch (SQLException e) { return false; }
+        } catch (SQLException e) {
+            return false;
+        }
     }
 
     // ==========================================
@@ -203,8 +245,10 @@ public class UsuarioDAO {
 
     /**
      * INICIAR SESIÓN
-     * Permite loguearse usando el nombre de usuario, o el correo (ya sea de cliente o entrenador).
-     * Cruza información de las tablas usando LEFT JOIN para traer el email correcto.
+     * Permite loguearse usando el nombre de usuario, o el correo (ya sea de cliente
+     * o entrenador).
+     * Cruza información de las tablas usando LEFT JOIN para traer el email
+     * correcto.
      */
     public Usuario login(String userOrEmail, String pass) {
         // Unimos las 3 tablas para buscar coincidencias en cualquiera de los campos
@@ -216,7 +260,7 @@ public class UsuarioDAO {
 
         Usuario u = null;
         try (Connection conn = ConexionDB.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+                PreparedStatement ps = conn.prepareStatement(sql)) {
 
             String term = userOrEmail.trim();
             ps.setString(1, term);
@@ -235,15 +279,19 @@ public class UsuarioDAO {
 
                     // Determinar de dónde sacar el email (si es cliente o entrenador)
                     String email = rs.getString("email_cliente");
-                    if (email == null) email = rs.getString("email_entrenador");
+                    if (email == null)
+                        email = rs.getString("email_entrenador");
                     u.setEmail(email);
 
                     u.setContrasena(null); // Seguridad: nunca devolvemos la contraseña al frontend
                 }
             }
-        } catch (Exception e) { e.printStackTrace(); }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         return u;
     }
+
     // ==========================================
     // MÉTODO REAL PARA EL DASHBOARD DE ADMIN
     // ==========================================
@@ -255,22 +303,26 @@ public class UsuarioDAO {
         try (Connection conn = ConexionDB.getConnection()) {
             // 1. Contar clientes reales
             ResultSet rs1 = conn.prepareStatement("SELECT COUNT(*) FROM clientes").executeQuery();
-            if(rs1.next()) totalClientes = rs1.getInt(1);
+            if (rs1.next())
+                totalClientes = rs1.getInt(1);
 
             // 2. Contar entrenadores reales
             ResultSet rs2 = conn.prepareStatement("SELECT COUNT(*) FROM entrenadores").executeQuery();
-            if(rs2.next()) totalEntrenadores = rs2.getInt(1);
+            if (rs2.next())
+                totalEntrenadores = rs2.getInt(1);
 
             // 3. Sumar el dinero real de la tabla pagos
             ResultSet rs3 = conn.prepareStatement("SELECT COALESCE(SUM(monto_pagado), 0) FROM pagos").executeQuery();
-            if(rs3.next()) ingresos = rs3.getDouble(1);
+            if (rs3.next())
+                ingresos = rs3.getDouble(1);
 
-        } catch(Exception e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
 
         // Construimos un JSON manual rápido para no crear más archivos
-        return "{\"totalClientes\": " + totalClientes + ", \"totalEntrenadores\": " + totalEntrenadores + ", \"ingresos\": " + ingresos + "}";
+        return "{\"totalClientes\": " + totalClientes + ", \"totalEntrenadores\": " + totalEntrenadores
+                + ", \"ingresos\": " + ingresos + "}";
     }
 
     // ==========================================
@@ -286,22 +338,27 @@ public class UsuarioDAO {
                 "ORDER BY u.id_rol ASC, u.id_usuario DESC";
 
         try (Connection conn = ConexionDB.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
+                PreparedStatement ps = conn.prepareStatement(sql);
+                ResultSet rs = ps.executeQuery()) {
             boolean first = true;
             while (rs.next()) {
-                if (!first) json.append(",");
+                if (!first)
+                    json.append(",");
                 json.append("{")
                         .append("\"id\":").append(rs.getInt("id_usuario")).append(",")
                         .append("\"usuario\":\"").append(rs.getString("usuario")).append("\",")
-                        .append("\"nombre\":\"").append(rs.getString("nombre") != null ? rs.getString("nombre") : "").append("\",")
-                        .append("\"apellido\":\"").append(rs.getString("apellido") != null ? rs.getString("apellido") : "").append("\",")
+                        .append("\"nombre\":\"").append(rs.getString("nombre") != null ? rs.getString("nombre") : "")
+                        .append("\",")
+                        .append("\"apellido\":\"")
+                        .append(rs.getString("apellido") != null ? rs.getString("apellido") : "").append("\",")
                         .append("\"rol\":\"").append(rs.getString("nombre_rol")).append("\",")
                         .append("\"activo\":").append(rs.getBoolean("activo"))
                         .append("}");
                 first = false;
             }
-        } catch (Exception e) { e.printStackTrace(); }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         json.append("]");
         return json.toString();
     }
@@ -310,12 +367,15 @@ public class UsuarioDAO {
     public boolean cambiarEstadoUsuario(int idUsuario, boolean nuevoEstado) {
         String sql = "UPDATE usuarios SET activo = ? WHERE id_usuario = ?";
         try (Connection conn = ConexionDB.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+                PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setBoolean(1, nuevoEstado);
             ps.setInt(2, idUsuario);
             return ps.executeUpdate() > 0;
-        } catch (Exception e) { return false; }
+        } catch (Exception e) {
+            return false;
+        }
     }
+
     // 3. AGREGAR NUEVO PERSONAL / USUARIO
     public boolean agregarPersonalAdmin(Usuario u) {
         String sql = "INSERT INTO usuarios (id_rol, usuario, contrasena, activo, nombre, apellido) VALUES (?, ?, ?, true, ?, ?)";
@@ -353,7 +413,9 @@ public class UsuarioDAO {
                 ps.setInt(5, u.getIdUsuario());
             }
             return ps.executeUpdate() > 0;
-        } catch (Exception e) { return false; }
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     // ==========================================
@@ -362,7 +424,8 @@ public class UsuarioDAO {
 
     /**
      * GUARDAR CÓDIGO DE DOBLE FACTOR
-     * Útil si en un futuro implementan reenvío de códigos o autenticación 2FA al iniciar sesión.
+     * Útil si en un futuro implementan reenvío de códigos o autenticación 2FA al
+     * iniciar sesión.
      */
     public boolean guardarCodigo2FA(int idUsuario, String codigo) {
         String sql = "INSERT INTO codigos_verificacion (id_usuario, codigo, fecha_expiracion) VALUES (?, ?, CURRENT_TIMESTAMP + INTERVAL '15 minutes')";
@@ -371,28 +434,35 @@ public class UsuarioDAO {
             ps.setString(2, codigo);
             ps.executeUpdate();
             return true;
-        } catch (Exception e) { return false; }
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /**
      * HERRAMIENTA DE DEBUGGING
      * Imprime en la consola del servidor todos los códigos asignados a un usuario.
-     * Sirve exclusivamente para que el desarrollador vea por qué falla una verificación.
+     * Sirve exclusivamente para que el desarrollador vea por qué falla una
+     * verificación.
      */
     private void verCodigosDeUsuario(int idUsuario) {
         try (Connection conn = ConexionDB.getConnection();
-             PreparedStatement ps = conn.prepareStatement("SELECT * FROM codigos_verificacion WHERE id_usuario = ?")) {
+                PreparedStatement ps = conn
+                        .prepareStatement("SELECT * FROM codigos_verificacion WHERE id_usuario = ?")) {
             ps.setInt(1, idUsuario);
             ResultSet rs = ps.executeQuery();
             System.out.println("--- DEBUG CÓDIGOS ACTUALES EN BD (ID " + idUsuario + ") ---");
-            while(rs.next()) {
+            while (rs.next()) {
                 System.out.println(" -> " + rs.getString("codigo") + " (Usado: " + rs.getBoolean("usado") + ")");
             }
             System.out.println("------------------------------------------------");
-        } catch(Exception e) {}
+        } catch (Exception e) {
+        }
     }
 
-    public boolean validarCodigo2FA(int id, String c) { return false; }
+    public boolean validarCodigo2FA(int id, String c) {
+        return false;
+    }
 
     /**
      * Lista todos los usuarios con rol y email (desde clientes o entrenadores).
@@ -400,15 +470,16 @@ public class UsuarioDAO {
     public List<Usuario> listar() {
         List<Usuario> lista = new ArrayList<>();
         String sql = "SELECT u.id_usuario, u.id_rol, u.usuario, u.activo, " +
-                "COALESCE(u.nombre, c.nombre, e.nombre) as nombre, COALESCE(u.apellido, c.apellido, e.apellido) as apellido, " +
+                "COALESCE(u.nombre, c.nombre, e.nombre) as nombre, COALESCE(u.apellido, c.apellido, e.apellido) as apellido, "
+                +
                 "c.email as email_c, e.email as email_e " +
                 "FROM usuarios u " +
                 "LEFT JOIN clientes c ON u.id_usuario = c.id_usuario " +
                 "LEFT JOIN entrenadores e ON u.id_usuario = e.id_usuario " +
                 "ORDER BY u.id_usuario DESC";
         try (Connection conn = ConexionDB.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
+                PreparedStatement ps = conn.prepareStatement(sql);
+                ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
                 Usuario u = new Usuario();
                 u.setIdUsuario(rs.getInt("id_usuario"));
@@ -418,11 +489,14 @@ public class UsuarioDAO {
                 u.setNombre(rs.getString("nombre"));
                 u.setApellido(rs.getString("apellido"));
                 String email = rs.getString("email_c");
-                if (email == null) email = rs.getString("email_e");
+                if (email == null)
+                    email = rs.getString("email_e");
                 u.setEmail(email);
                 lista.add(u);
             }
-        } catch (Exception e) { e.printStackTrace(); }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         return lista;
     }
 
@@ -431,14 +505,15 @@ public class UsuarioDAO {
      */
     public Usuario obtenerPorId(int id) {
         String sql = "SELECT u.id_usuario, u.id_rol, u.usuario, u.activo, " +
-                "COALESCE(u.nombre, c.nombre, e.nombre) as nombre, COALESCE(u.apellido, c.apellido, e.apellido) as apellido, " +
+                "COALESCE(u.nombre, c.nombre, e.nombre) as nombre, COALESCE(u.apellido, c.apellido, e.apellido) as apellido, "
+                +
                 "c.email as email_c, e.email as email_e " +
                 "FROM usuarios u " +
                 "LEFT JOIN clientes c ON u.id_usuario = c.id_usuario " +
                 "LEFT JOIN entrenadores e ON u.id_usuario = e.id_usuario " +
                 "WHERE u.id_usuario = ?";
         try (Connection conn = ConexionDB.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+                PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, id);
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
@@ -450,12 +525,15 @@ public class UsuarioDAO {
                     u.setNombre(rs.getString("nombre"));
                     u.setApellido(rs.getString("apellido"));
                     String email = rs.getString("email_c");
-                    if (email == null) email = rs.getString("email_e");
+                    if (email == null)
+                        email = rs.getString("email_e");
                     u.setEmail(email);
                     return u;
                 }
             }
-        } catch (Exception e) { e.printStackTrace(); }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         return null;
     }
 
@@ -463,13 +541,14 @@ public class UsuarioDAO {
      * Actualiza usuario (nombre, apellido, usuario; opcionalmente contraseña).
      */
     public boolean actualizar(Usuario u) {
-        if (u == null || u.getIdUsuario() <= 0) return false;
+        if (u == null || u.getIdUsuario() <= 0)
+            return false;
         boolean cambiaPass = (u.getContrasena() != null && !u.getContrasena().trim().isEmpty());
         String sql = cambiaPass
                 ? "UPDATE usuarios SET usuario=?, contrasena=?, nombre=?, apellido=? WHERE id_usuario=?"
                 : "UPDATE usuarios SET usuario=?, nombre=?, apellido=? WHERE id_usuario=?";
         try (Connection conn = ConexionDB.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+                PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, u.getUsuario());
             if (cambiaPass) {
                 ps.setString(2, SecurityUtil.encriptar(u.getContrasena()));
@@ -482,7 +561,10 @@ public class UsuarioDAO {
                 ps.setInt(4, u.getIdUsuario());
             }
             return ps.executeUpdate() > 0;
-        } catch (Exception e) { e.printStackTrace(); return false; }
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 
     /**
