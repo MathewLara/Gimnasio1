@@ -50,7 +50,8 @@ public class ClienteDAO {
     /**
      * Actualiza datos de un cliente.
      */
-    public boolean actualizar(int idCliente, String nombre, String apellido, String email, String telefono, java.sql.Date fechaNacimiento) {
+    public boolean actualizar(int idCliente, String nombre, String apellido, String email, String telefono,
+            java.sql.Date fechaNacimiento) {
         try (Connection conn = ConexionDB.getConnection()) {
             String sql = "UPDATE clientes SET nombre=?, apellido=?, email=?, telefono=?, fecha_nacimiento=? WHERE id_cliente=?";
             PreparedStatement ps = conn.prepareStatement(sql);
@@ -74,7 +75,8 @@ public class ClienteDAO {
     public String obtenerHistorialPagosJSON(int idCliente) {
         StringBuilder json = new StringBuilder("[");
         try (Connection conn = ConexionDB.getConnection()) {
-            String sql = "SELECT p.id_pago, p.fecha_pago, p.monto_pagado, p.metodo_pago, p.referencia_comprobante, m.nombre as membresia " +
+            String sql = "SELECT p.id_pago, p.fecha_pago, p.monto_pagado, p.metodo_pago, p.referencia_comprobante, m.nombre as membresia "
+                    +
                     "FROM pagos p LEFT JOIN membresias m ON p.id_membresia = m.id_membresia " +
                     "WHERE p.id_cliente = ? ORDER BY p.fecha_pago DESC LIMIT 50";
             PreparedStatement ps = conn.prepareStatement(sql);
@@ -82,13 +84,15 @@ public class ClienteDAO {
             ResultSet rs = ps.executeQuery();
             boolean first = true;
             while (rs.next()) {
-                if (!first) json.append(",");
+                if (!first)
+                    json.append(",");
                 json.append("{")
                         .append("\"idPago\":").append(rs.getInt("id_pago")).append(",")
                         .append("\"fecha\":\"").append(rs.getTimestamp("fecha_pago")).append("\",")
                         .append("\"monto\":").append(rs.getDouble("monto_pagado")).append(",")
                         .append("\"metodo\":\"").append(JsonUtil.escape(rs.getString("metodo_pago"))).append("\",")
-                        .append("\"referencia\":\"").append(JsonUtil.escape(rs.getString("referencia_comprobante"))).append("\",")
+                        .append("\"referencia\":\"").append(JsonUtil.escape(rs.getString("referencia_comprobante")))
+                        .append("\",")
                         .append("\"membresia\":\"").append(JsonUtil.escape(rs.getString("membresia"))).append("\"")
                         .append("}");
                 first = false;
@@ -114,13 +118,15 @@ public class ClienteDAO {
             ResultSet rs = ps.executeQuery();
             boolean first = true;
             while (rs.next()) {
-                if (!first) json.append(",");
+                if (!first)
+                    json.append(",");
                 json.append("{")
                         .append("\"idPago\":").append(rs.getInt("id_pago")).append(",")
                         .append("\"fecha\":\"").append(rs.getTimestamp("fecha_pago")).append("\",")
                         .append("\"monto\":").append(rs.getDouble("monto_pagado")).append(",")
                         .append("\"metodo\":\"").append(JsonUtil.escape(rs.getString("metodo_pago"))).append("\",")
-                        .append("\"numeroFactura\":\"").append(JsonUtil.escape(rs.getString("numero_factura"))).append("\"")
+                        .append("\"numeroFactura\":\"").append(JsonUtil.escape(rs.getString("numero_factura")))
+                        .append("\"")
                         .append("}");
                 first = false;
             }
