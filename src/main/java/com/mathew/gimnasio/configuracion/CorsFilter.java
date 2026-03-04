@@ -13,7 +13,8 @@ import java.io.IOException;
 @PreMatching // <--- ESTO ES CLAVE: Se ejecuta antes de buscar la ruta
 public class CorsFilter implements ContainerRequestFilter, ContainerResponseFilter {
 
-    // 1. Atrapa la petición "fantasma" (OPTIONS) y le responde "Todo OK" inmediatamente
+    // 1. Atrapa la petición "fantasma" (OPTIONS) y le responde "Todo OK"
+    // inmediatamente
     @Override
     public void filter(ContainerRequestContext requestContext) throws IOException {
         if (requestContext.getMethod().equalsIgnoreCase("OPTIONS")) {
@@ -21,12 +22,21 @@ public class CorsFilter implements ContainerRequestFilter, ContainerResponseFilt
         }
     }
 
-    // 2. Añade tus cabeceras a TODAS las respuestas (lo que ya tenías muy bien hecho)
+    // 2. Añade tus cabeceras a TODAS las respuestas con origen dinámico seguro
     @Override
-    public void filter(ContainerRequestContext requestContext, ContainerResponseContext responseContext) throws IOException {
-        responseContext.getHeaders().add("Access-Control-Allow-Origin", "*");
-        responseContext.getHeaders().add("Access-Control-Allow-Headers", "origin, content-type, accept, authorization");
-        responseContext.getHeaders().add("Access-Control-Allow-Credentials", "true");
-        responseContext.getHeaders().add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, HEAD");
+    public void filter(ContainerRequestContext requestContext, ContainerResponseContext responseContext)
+            throws IOException {
+        String origin = requestContext.getHeaderString("Origin");
+        if (origin != null && !origin.isEmpty()) {
+            responseContext.getHeaders().putSingle("Access-Control-Allow-Origin", origin);
+            responseContext.getHeaders().putSingle("Vary", "Origin");
+        } else {
+            responseContext.getHeaders().putSingle("Access-Control-Allow-Origin", "*");
+        }
+
+        responseContext.getHeaders().putSingle("Access-Control-Allow-Headers",
+                "origin, content-type, accept, authorization");
+        responseContext.getHeaders().putSingle("Access-Control-Allow-Credentials", "true");
+        responseContext.getHeaders().putSingle("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, HEAD");
     }
 }

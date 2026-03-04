@@ -1,21 +1,24 @@
 package com.mathew.gimnasio.controladores;
 
+import com.mathew.gimnasio.dao.ClienteDAO;
 import com.mathew.gimnasio.dao.ClienteDashboardDAO;
+import com.mathew.gimnasio.modelos.ClienteUpdateDTO;
 import com.mathew.gimnasio.modelos.ResumenClienteDTO;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.POST;
 
+import java.sql.Date;
+import java.util.Map;
+
 /**
- * CONTROLADOR DE CLIENTES
- * * Clase encargada de exponer los recursos REST para la entidad Cliente.
- * Actúa como la capa de comunicación entre las peticiones HTTP del frontend
- * y la lógica de acceso a datos del backend.
+ * CONTROLADOR DE CLIENTES (RF03)
  */
 @Path("/clientes")
 public class ClienteController {
     private ClienteDashboardDAO dao = new ClienteDashboardDAO();
+    private ClienteDAO clienteDAO = new ClienteDAO();
 
     /**
      * Recupera el conjunto de datos necesarios para renderizar el Dashboard del cliente.
@@ -36,6 +39,48 @@ public class ClienteController {
         // Respuesta de error controlado (HTTP 404) cuando el recurso no existe
         return Response.status(404).entity("{\"mensaje\":\"Cliente no encontrado\"}").build();
     }
+    /**
+     * GET /clientes/{id} - Obtener cliente por id_cliente (RF03).
+     * {id} = id_cliente (no id_usuario).
+     */
+    @GET
+    @Path("/{id}")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response obtenerCliente(@PathParam("id") int id) {
+        Map<String, Object> cliente = clienteDAO.obtenerPorId(id);
+        if (cliente != null) return Response.ok(cliente).build();
+        return Response.status(404).entity("{\"mensaje\":\"Cliente no encontrado\"}").build();
+    }
+
+    /**
+     * PUT /clientes/{id} - Actualizar datos del cliente (RF03)
+     */
+    @PUT
+    @Path("/{id}")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response actualizarCliente(@PathParam("id") int id, ClienteUpdateDTO dto) {
+        java.sql.Date fechaNac = null;
+        if (dto.getFechaNacimiento() != null && !dto.getFechaNacimiento().isEmpty()) {
+            try { fechaNac = Date.valueOf(dto.getFechaNacimiento()); } catch (Exception e) {}
+        }
+        boolean ok = clienteDAO.actualizar(id, dto.getNombre(), dto.getApellido(),
+                dto.getEmail(), dto.getTelefono(), fechaNac);
+        if (ok) return Response.ok("{\"mensaje\":\"Cliente actualizado\"}").build();
+        return Response.status(400).entity("{\"mensaje\":\"Error al actualizar\"}").build();
+    }
+
+    /**
+     * GET /clientes/{id}/pagos - Historial de pagos del cliente (RF03, RF07)
+     */
+    @GET
+    @Path("/{id}/pagos")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response historialPagos(@PathParam("id") int id) {
+        String json = clienteDAO.obtenerHistorialPagosJSON(id);
+        return Response.ok(json).build();
+    }
+
     /**
      * Procesa la notificación de finalización de una sesión de entrenamiento.
      * * Este recurso utiliza el metodo HTTP POST para realizar una escritura persistente

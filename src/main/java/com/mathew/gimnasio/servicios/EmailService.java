@@ -1,67 +1,61 @@
 package com.mathew.gimnasio.servicios;
 
-import jakarta.mail.*;
-import jakarta.mail.internet.*;
-import java.util.Properties;
+import com.mathew.gimnasio.configuracion.ConfiguracionEnv;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 
 /**
- * SERVICIO DE CORREO ELECTRÓNICO (EMAIL SERVICE)
- * Esta clase se encarga de enviar correos automáticos desde nuestra aplicación.
- * Utiliza la librería Jakarta Mail y se conecta al servidor SMTP de Gmail
- * para hacer llegar los códigos de verificación a los nuevos clientes.
+ * Servicio de correo usando la API de Resend vía HTTP.
+ * Requiere la variable de entorno RESEND_API_KEY.
  */
 public class EmailService {
 
-    // Credenciales de la cuenta remitente (el correo oficial del gimnasio)
-    // Se utiliza una "Contraseña de Aplicación" de Google para saltar la verificación en dos pasos
-    private final String miCorreo = "mathewlara2006@gmail.com";
-    private final String miPassword = "ozmr racb urap vtdv"; //
+    private final String apiKey;
+    private final String remitente;
 
-    /**
-     * ENVIAR CÓDIGO DE VERIFICACIÓN
-     * Configura la conexión con Google, arma el "sobre" virtual del correo,
-     * le inserta el mensaje y lo despacha al destinatario.
-     * @param destinatario El correo electrónico del usuario que se está registrando.
-     * @param codigo El código numérico generado aleatoriamente en el controlador.
-     */
+    public EmailService() {
+        this.apiKey = ConfiguracionEnv.get("RESEND_API_KEY", "");
+        // Resend en su plan gratuito obliga a que el remitente sea exactamente este:
+        this.remitente = "onboarding@resend.dev";
+    }
+
     public void enviarCodigo(String destinatario, String codigo) {
-
-        // 1. Configuración de las propiedades del servidor SMTP de Google
-        Properties props = new Properties();
-        props.put("mail.smtp.auth", "true");
-        props.put("mail.smtp.ssl.enable", "true"); // Cambiamos starttls por ssl.enable
-        props.put("mail.smtp.host", "smtp.gmail.com");
-        props.put("mail.smtp.port", "465"); // Cambiamos el puerto al 465
-
-        // 2. Sesión de seguridad y autenticación
-        // Creamos una sesión en el servidor de correo usando nuestras credenciales
-        Session session = Session.getInstance(props, new Authenticator() {
-            @Override
-            protected PasswordAuthentication getPasswordAuthentication() {
-                return new PasswordAuthentication(miCorreo, miPassword);
-            }
-        });
+        if (apiKey.isEmpty()) {
+            System.err.println("RESEND_API_KEY no configurado; correo no enviado.");
+            return;
+        }
 
         try {
-            // 3. Armado del mensaje (Como escribir una carta física)
-            Message message = new MimeMessage(session);
-            message.setFrom(new InternetAddress(miCorreo)); // Remitente: Quién envía la carta
-            message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(destinatario)); // Destinatario: A quién va dirigida
-            message.setSubject("Código de Verificación - Gimnasio"); // Asunto del correo
+            URL url = new URL("https://api.resend.com/emails");
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Authorization", "Bearer " + apiKey);
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setDoOutput(true);
 
-            // Cuerpo del correo con el código concatenado directamente en el texto
-            message.setText("Hola,\n\nTu código de acceso es: " + codigo + "\n\nEste código expira en 5 minutos.");
+            String jsonInputString = "{"
+                    + "\"from\": \"Gimnasio <" + remitente + ">\","
+                    + "\"to\": [\"" + destinatario + "\"],"
+                    + "\"subject\": \"Código de Verificación - Gimnasio\","
+                    + "\"html\": \"<p>Hola,</p><p>Tu código de acceso es: <strong>" + codigo
+                    + "</strong></p><p>Este código expira en 5 minutos.</p>\""
+                    + "}";
 
-            // 4. Envío final del correo
-            // Transport.send toma el mensaje armado y lo dispara por la red
-            Transport.send(message);
-            System.out.println("Correo enviado correctamente a: " + destinatario);
+            try (OutputStream os = conn.getOutputStream()) {
+                byte[] input = jsonInputString.getBytes("utf-8");
+                os.write(input, 0, input.length);
+            }
 
-        } catch (MessagingException e) {
-            // Si el correo no sale (ej. no hay internet, credenciales bloqueadas, o puerto cerrado),
-            // capturamos el error para que el servidor no se caiga y mostramos el problema.
+            int code = conn.getResponseCode();
+            if (code >= 200 && code < 300) {
+                System.out.println("Correo enviado correctamente a: " + destinatario + " (Resend API)");
+            } else {
+                System.err.println("Error enviando correo (Resend API HTTP " + code + ")");
+            }
+        } catch (Exception e) {
             e.printStackTrace();
-            System.out.println("Error enviando correo: " + e.getMessage());
+            System.err.println("Excepción enviando correo por HTTP: " + e.getMessage());
         }
     }
 }

@@ -1,15 +1,24 @@
 package com.mathew.gimnasio.util;
 
+import com.mathew.gimnasio.configuracion.ConfiguracionEnv;
 import com.mathew.gimnasio.configuracion.ConexionDB;
 import java.io.File;
 import java.io.FileInputStream;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 
+/**
+ * Herramienta de carga local: sube imágenes de productos a la BD.
+ * Ruta configurable por variable de entorno IMAGENES_GIMNASIO_PATH (no usar rutas hardcodeadas en producción).
+ */
 public class CargadorFotosDB {
 
     public static void main(String[] args) {
-        String rutaCarpeta = "C:/Imagenes Gimnasio/";
+        String rutaCarpeta = ConfiguracionEnv.get("IMAGENES_GIMNASIO_PATH", "");
+        if (rutaCarpeta.isEmpty()) {
+            System.err.println("Definir IMAGENES_GIMNASIO_PATH (ej. C:/Imagenes Gimnasio/)");
+            return;
+        }
         File carpeta = new File(rutaCarpeta);
 
         try (Connection conn = ConexionDB.getConnection()) {

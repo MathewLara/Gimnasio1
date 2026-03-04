@@ -1,3 +1,7 @@
+# Credenciales locales (no subir)
+.env
+.env.local
+
 target/
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
