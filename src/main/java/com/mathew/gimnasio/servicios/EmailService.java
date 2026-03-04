@@ -16,9 +16,8 @@ public class EmailService {
 
     public EmailService() {
         this.apiKey = ConfiguracionEnv.get("RESEND_API_KEY", "");
-        // Si no se configura un remitente, Resend requiere usar 'onboarding@resend.dev'
-        // para pruebas
-        this.remitente = ConfiguracionEnv.get("MAIL_USER", "onboarding@resend.dev");
+        // Resend en su plan gratuito obliga a que el remitente sea exactamente este:
+        this.remitente = "onboarding@resend.dev";
     }
 
     public void enviarCodigo(String destinatario, String codigo) {
