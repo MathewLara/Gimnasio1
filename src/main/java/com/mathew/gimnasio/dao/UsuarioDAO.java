@@ -336,9 +336,14 @@ public class UsuarioDAO {
     // 1. Listar todos los usuarios con sus roles
     public String obtenerUsuariosParaAdminJSON() {
         StringBuilder json = new StringBuilder("[");
-        // Hacemos un JOIN para traer el nombre del rol en lugar de solo el número
-        String sql = "SELECT u.id_usuario, u.usuario, u.nombre, u.apellido, u.activo, r.nombre_rol " +
+        // JOIN con roles, clientes y membresias para traer datos completos
+        String sql = "SELECT u.id_usuario, u.usuario, u.nombre, u.apellido, u.activo, r.nombre_rol, " +
+                "COALESCE(c.id_cliente, 0) as id_cliente, " +
+                "COALESCE(m.nombre, '') as nombre_membresia, " +
+                "c.fecha_vencimiento " +
                 "FROM usuarios u INNER JOIN roles r ON u.id_rol = r.id_rol " +
+                "LEFT JOIN clientes c ON u.id_usuario = c.id_usuario " +
+                "LEFT JOIN membresias m ON c.id_membresia = m.id_membresia " +
                 "ORDER BY u.id_rol ASC, u.id_usuario DESC";
 
         try (Connection conn = ConexionDB.getConnection();
@@ -356,7 +361,15 @@ public class UsuarioDAO {
                         .append("\"apellido\":\"")
                         .append(rs.getString("apellido") != null ? rs.getString("apellido") : "").append("\",")
                         .append("\"rol\":\"").append(rs.getString("nombre_rol")).append("\",")
-                        .append("\"activo\":").append(rs.getBoolean("activo"))
+                        .append("\"activo\":").append(rs.getBoolean("activo")).append(",")
+                        .append("\"idCliente\":").append(rs.getInt("id_cliente")).append(",")
+                        .append("\"membresia\":\"")
+                        .append(rs.getString("nombre_membresia") != null ? rs.getString("nombre_membresia") : "")
+                        .append("\",")
+                        .append("\"fechaVencimiento\":")
+                        .append(rs.getString("fecha_vencimiento") != null
+                                ? "\"" + rs.getString("fecha_vencimiento") + "\""
+                                : "null")
                         .append("}");
                 first = false;
             }
