@@ -415,6 +415,22 @@ public class UsuarioDAO {
         }
     }
 
+    // Helper para obtener el PK id_entrenador desde el id_usuario del entrenador
+    private Integer obtenerIdEntrenadorReal(Connection conn, Integer idUsuarioEntrenador) throws SQLException {
+        if (idUsuarioEntrenador == null || idUsuarioEntrenador <= 0)
+            return null;
+        try (PreparedStatement ps = conn
+                .prepareStatement("SELECT id_entrenador FROM entrenadores WHERE id_usuario = ?")) {
+            ps.setInt(1, idUsuarioEntrenador);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt("id_entrenador");
+                }
+            }
+        }
+        return null;
+    }
+
     // 3. AGREGAR NUEVO PERSONAL / USUARIO
     public boolean agregarPersonalAdmin(Usuario u) {
         String insertUsuario = "INSERT INTO usuarios (id_rol, usuario, contrasena, activo, nombre, apellido) VALUES (?, ?, ?, true, ?, ?) RETURNING id_usuario";
@@ -444,6 +460,7 @@ public class UsuarioDAO {
             }
 
             if (u.getIdRol() == 4) { // Cliente
+                Integer idEntrenadorReal = obtenerIdEntrenadorReal(conn, u.getIdEntrenador());
                 try (PreparedStatement psC = conn.prepareStatement(insertCliente)) {
                     psC.setInt(1, newIdUsuario);
                     psC.setString(2, u.getNombre() != null ? u.getNombre() : "Sin Nombre");
@@ -457,8 +474,8 @@ public class UsuarioDAO {
                     } else {
                         psC.setNull(7, java.sql.Types.DATE);
                     }
-                    if (u.getIdEntrenador() != null && u.getIdEntrenador() > 0) {
-                        psC.setInt(8, u.getIdEntrenador());
+                    if (idEntrenadorReal != null) {
+                        psC.setInt(8, idEntrenadorReal);
                     } else {
                         psC.setNull(8, java.sql.Types.INTEGER);
                     }
@@ -538,6 +555,8 @@ public class UsuarioDAO {
                     }
                 }
 
+                Integer idEntrenadorReal = obtenerIdEntrenadorReal(conn, u.getIdEntrenador());
+
                 if (existeCliente) {
                     String sqlC = "UPDATE clientes SET nombre=?, apellido=?, email=?, telefono=?, cedula=?, fecha_nacimiento=?, id_entrenador=? WHERE id_usuario=?";
                     try (PreparedStatement psC = conn.prepareStatement(sqlC)) {
@@ -552,8 +571,8 @@ public class UsuarioDAO {
                         } else {
                             psC.setNull(6, java.sql.Types.DATE);
                         }
-                        if (u.getIdEntrenador() != null && u.getIdEntrenador() > 0) {
-                            psC.setInt(7, u.getIdEntrenador());
+                        if (idEntrenadorReal != null) {
+                            psC.setInt(7, idEntrenadorReal);
                         } else {
                             psC.setNull(7, java.sql.Types.INTEGER);
                         }
@@ -575,8 +594,8 @@ public class UsuarioDAO {
                         } else {
                             psC.setNull(7, java.sql.Types.DATE);
                         }
-                        if (u.getIdEntrenador() != null && u.getIdEntrenador() > 0) {
-                            psC.setInt(8, u.getIdEntrenador());
+                        if (idEntrenadorReal != null) {
+                            psC.setInt(8, idEntrenadorReal);
                         } else {
                             psC.setNull(8, java.sql.Types.INTEGER);
                         }

@@ -142,17 +142,23 @@ public class EntrenadorDAO {
             else
                 return false;
 
-            // 2. Limpieza: Si le asignamos una rutina nueva, borramos el "completado" de
-            // hoy.
-            String sqlReset = "DELETE FROM historial_entrenamientos WHERE id_cliente = ? AND fecha = CURRENT_DATE";
-            PreparedStatement psReset = conn.prepareStatement(sqlReset);
-            psReset.setInt(1, datos.getIdCliente());
-            psReset.executeUpdate();
+            // 2. Limpieza: Si le asignamos una rutina nueva a un cliente, borramos el
+            // "completado" de hoy.
+            if (datos.getIdCliente() != null && datos.getIdCliente() > 0) {
+                String sqlReset = "DELETE FROM historial_entrenamientos WHERE id_cliente = ? AND fecha = CURRENT_DATE";
+                PreparedStatement psReset = conn.prepareStatement(sqlReset);
+                psReset.setInt(1, datos.getIdCliente());
+                psReset.executeUpdate();
+            }
 
             // 3. Guardamos la cabecera de la rutina.
             String sqlRutina = "INSERT INTO rutinas (id_cliente, id_entrenador, nombre_rutina, fecha_creacion, activa) VALUES (?, ?, ?, CURRENT_DATE, TRUE) RETURNING id_rutina";
             ps = conn.prepareStatement(sqlRutina);
-            ps.setInt(1, datos.getIdCliente());
+            if (datos.getIdCliente() != null && datos.getIdCliente() > 0) {
+                ps.setInt(1, datos.getIdCliente());
+            } else {
+                ps.setNull(1, java.sql.Types.INTEGER);
+            }
             ps.setInt(2, idEntrenador);
             ps.setString(3, datos.getNombreRutina());
             rs = ps.executeQuery();
@@ -220,6 +226,70 @@ public class EntrenadorDAO {
                     conn.rollback();
             } catch (Exception ex) {
             } // Si falló algo, cancelamos todo
+            return false;
+        } finally {
+            try {
+                if (conn != null)
+                    conn.close();
+            } catch (Exception ex) {
+            }
+        }
+    }
+
+    /**
+     * ASIGNAR RUTINA A CLIENTE
+     * Clona una rutina plantilla (id_cliente = null) a un cliente específico.
+     */
+    public boolean asignarRutina(int idRutinaTemplate, int idClienteTarget) {
+        Connection conn = null;
+        try {
+            conn = ConexionDB.getConnection();
+            conn.setAutoCommit(false);
+
+            // 1. Limpieza: borramos el "completado" de hoy.
+            String sqlReset = "DELETE FROM historial_entrenamientos WHERE id_cliente = ? AND fecha = CURRENT_DATE";
+            try (PreparedStatement psReset = conn.prepareStatement(sqlReset)) {
+                psReset.setInt(1, idClienteTarget);
+                psReset.executeUpdate();
+            }
+
+            // 2. Copiamos la cabecera de la rutina
+            String sqlCloneRutina = "INSERT INTO rutinas (id_cliente, id_entrenador, nombre_rutina, fecha_creacion, activa) "
+                    +
+                    "SELECT ?, id_entrenador, nombre_rutina, CURRENT_DATE, TRUE " +
+                    "FROM rutinas WHERE id_rutina = ? RETURNING id_rutina";
+            int newRutinaId = 0;
+            try (PreparedStatement psR = conn.prepareStatement(sqlCloneRutina)) {
+                psR.setInt(1, idClienteTarget);
+                psR.setInt(2, idRutinaTemplate);
+                try (ResultSet rs = psR.executeQuery()) {
+                    if (rs.next())
+                        newRutinaId = rs.getInt(1);
+                    else
+                        throw new Exception("No se encontró la rutina plantilla");
+                }
+            }
+
+            // 3. Copiamos el detalle de los ejercicios
+            String sqlCloneDetalle = "INSERT INTO detalle_rutinas (id_rutina, id_ejercicio, series, repeticiones, descanso) "
+                    +
+                    "SELECT ?, id_ejercicio, series, repeticiones, descanso " +
+                    "FROM detalle_rutinas WHERE id_rutina = ?";
+            try (PreparedStatement psD = conn.prepareStatement(sqlCloneDetalle)) {
+                psD.setInt(1, newRutinaId);
+                psD.setInt(2, idRutinaTemplate);
+                psD.executeUpdate();
+            }
+
+            conn.commit();
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            try {
+                if (conn != null)
+                    conn.rollback();
+            } catch (Exception ex) {
+            }
             return false;
         } finally {
             try {

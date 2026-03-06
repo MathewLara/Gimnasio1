@@ -11,13 +11,15 @@ import jakarta.ws.rs.core.Response;
 /**
  * CONTROLADOR DE ENTRENADORES
  * * Esta clase es el centro de mando para los profesores del gimnasio.
- * Permite que los entrenadores gestionen sus perfiles, creen ejercicios para los alumnos
+ * Permite que los entrenadores gestionen sus perfiles, creen ejercicios para
+ * los alumnos
  * y organicen su agenda de trabajo desde la aplicación.
  */
 @Path("/entrenadores")
 public class EntrenadorController {
 
-    // El DAO es el asistente que va a la base de datos a traer o guardar la información
+    // El DAO es el asistente que va a la base de datos a traer o guardar la
+    // información
     private EntrenadorDAO dao = new EntrenadorDAO();
 
     /**
@@ -30,15 +32,18 @@ public class EntrenadorController {
     @Path("/{idUsuario}/dashboard")
     @Produces(MediaType.APPLICATION_JSON)
     public Response getDashboard(@PathParam("idUsuario") int id) {
-        // Le pedimos al asistente (DAO) los datos del profesor Mike o el que esté logueado
+        // Le pedimos al asistente (DAO) los datos del profesor Mike o el que esté
+        // logueado
         EntrenadorDashboardDTO dto = dao.obtenerDashboard(id);
-        if (dto != null) return Response.ok(dto).build(); // Todo salió bien, entregamos los datos
+        if (dto != null)
+            return Response.ok(dto).build(); // Todo salió bien, entregamos los datos
         return Response.status(Response.Status.NOT_FOUND).build(); // No encontramos al entrenador
     }
 
     /**
      * CREAR NUEVA RUTINA
-     * Se usa cuando el entrenador termina de armar un plan de ejercicios para un alumno
+     * Se usa cuando el entrenador termina de armar un plan de ejercicios para un
+     * alumno
      * y presiona el botón "Guardar".
      * URL: POST /api/entrenadores/{id}/crearRutina
      */
@@ -49,13 +54,15 @@ public class EntrenadorController {
     public Response crearRutina(@PathParam("idUsuario") int id, NuevaRutinaDTO datos) {
         // Intentamos guardar los ejercicios recibidos en la base de datos
         boolean exito = dao.crearRutina(id, datos);
-        if (exito) return Response.ok("{\"mensaje\": \"Rutina creada\"}").build();
+        if (exito)
+            return Response.ok("{\"mensaje\": \"Rutina creada\"}").build();
         return Response.status(500).entity("{\"mensaje\": \"Error\"}").build();
     }
 
     /**
      * CONSULTAR AGENDA
-     * Muestra la lista de actividades o alumnos que el entrenador tiene programados para hoy.
+     * Muestra la lista de actividades o alumnos que el entrenador tiene programados
+     * para hoy.
      * URL: GET /api/entrenadores/{id}/agenda
      */
     @GET
@@ -68,7 +75,8 @@ public class EntrenadorController {
 
     /**
      * ELIMINAR O DESACTIVAR RUTINA
-     * Si una rutina ya no se usa o fue un error, el entrenador puede borrarla de la vista.
+     * Si una rutina ya no se usa o fue un error, el entrenador puede borrarla de la
+     * vista.
      * URL: DELETE /api/entrenadores/rutinas/{idRutina}
      */
     @DELETE
@@ -82,9 +90,11 @@ public class EntrenadorController {
         }
         return Response.status(500).entity("{\"mensaje\": \"No se pudo eliminar\"}").build();
     }
+
     /**
      * MODIFICAR RUTINA EXISTENTE
-     * Permite al entrenador cambiar ejercicios, series o repeticiones de una rutina ya creada.
+     * Permite al entrenador cambiar ejercicios, series o repeticiones de una rutina
+     * ya creada.
      * URL: PUT /api/entrenadores/rutinas/{idRutina}
      */
     @PUT
@@ -94,13 +104,15 @@ public class EntrenadorController {
     public Response editarRutina(@PathParam("idRutina") int id, NuevaRutinaDTO datos) {
         // Actualizamos los datos con la nueva información enviada
         boolean exito = dao.actualizarRutina(id, datos);
-        if (exito) return Response.ok("{\"mensaje\": \"Rutina actualizada\"}").build();
+        if (exito)
+            return Response.ok("{\"mensaje\": \"Rutina actualizada\"}").build();
         return Response.status(500).entity("{\"mensaje\": \"Error al editar\"}").build();
     }
 
     /**
      * RESTAURAR RUTINA
-     * Si el entrenador eliminó una rutina por error, este botón permite traerla de vuelta.
+     * Si el entrenador eliminó una rutina por error, este botón permite traerla de
+     * vuelta.
      * URL: PUT /api/entrenadores/rutinas/{idRutina}/reactivar
      */
     @PUT
@@ -108,8 +120,25 @@ public class EntrenadorController {
     @Produces(MediaType.APPLICATION_JSON)
     public Response reactivarRutina(@PathParam("idRutina") int id) {
         boolean exito = dao.reactivarRutina(id);
-        if (exito) return Response.ok("{\"mensaje\": \"Rutina restaurada\"}").build();
+        if (exito)
+            return Response.ok("{\"mensaje\": \"Rutina restaurada\"}").build();
         return Response.status(500).entity("{\"mensaje\": \"Error al restaurar\"}").build();
+    }
+
+    /**
+     * ASIGNAR RUTINA (PLANTILLA) A CLIENTE
+     * URL: POST
+     * /api/entrenadores/rutinas/{idRutinaTemplate}/asignar/{idClienteTarget}
+     */
+    @POST
+    @Path("/rutinas/{idRutinaTemplate}/asignar/{idClienteTarget}")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response asignarRutina(@PathParam("idRutinaTemplate") int idRutinaTemplate,
+            @PathParam("idClienteTarget") int idClienteTarget) {
+        boolean exito = dao.asignarRutina(idRutinaTemplate, idClienteTarget);
+        if (exito)
+            return Response.ok("{\"mensaje\": \"Rutina asignada exitosamente al cliente\"}").build();
+        return Response.status(500).entity("{\"mensaje\": \"Error al asignar la rutina\"}").build();
     }
 
     // ========== CRUD ENTRENADORES (RF04) ==========
@@ -125,7 +154,8 @@ public class EntrenadorController {
     @Produces(MediaType.APPLICATION_JSON)
     public Response obtenerEntrenador(@PathParam("id") int id) {
         String json = dao.obtenerEntrenadorJSON(id);
-        if (json != null) return Response.ok(json).build();
+        if (json != null)
+            return Response.ok(json).build();
         return Response.status(404).entity("{\"mensaje\":\"Entrenador no encontrado\"}").build();
     }
 
@@ -133,7 +163,8 @@ public class EntrenadorController {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public Response crearEntrenador(EntrenadorDTO dto) {
-        if (dao.crearEntrenador(dto)) return Response.ok("{\"mensaje\":\"Entrenador creado\"}").build();
+        if (dao.crearEntrenador(dto))
+            return Response.ok("{\"mensaje\":\"Entrenador creado\"}").build();
         return Response.status(400).entity("{\"mensaje\":\"Error al crear entrenador\"}").build();
     }
 
@@ -142,7 +173,8 @@ public class EntrenadorController {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public Response actualizarEntrenador(@PathParam("id") int id, EntrenadorDTO dto) {
-        if (dao.actualizarEntrenador(id, dto)) return Response.ok("{\"mensaje\":\"Entrenador actualizado\"}").build();
+        if (dao.actualizarEntrenador(id, dto))
+            return Response.ok("{\"mensaje\":\"Entrenador actualizado\"}").build();
         return Response.status(400).entity("{\"mensaje\":\"Error al actualizar\"}").build();
     }
 
@@ -150,7 +182,8 @@ public class EntrenadorController {
     @Path("/{id}")
     @Produces(MediaType.APPLICATION_JSON)
     public Response eliminarEntrenador(@PathParam("id") int id) {
-        if (dao.eliminarEntrenador(id)) return Response.ok("{\"mensaje\":\"Entrenador desactivado\"}").build();
+        if (dao.eliminarEntrenador(id))
+            return Response.ok("{\"mensaje\":\"Entrenador desactivado\"}").build();
         return Response.status(400).entity("{\"mensaje\":\"Error al eliminar\"}").build();
     }
 }
