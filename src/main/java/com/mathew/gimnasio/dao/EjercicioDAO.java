@@ -34,8 +34,7 @@ public class EjercicioDAO {
                 lista.add(new EjercicioItem(
                         rs.getInt("id_ejercicio"),
                         rs.getString("nombre_ejercicio"),
-                        rs.getString("grupo_muscular")
-                ));
+                        rs.getString("grupo_muscular")));
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -51,10 +50,12 @@ public class EjercicioDAO {
             ResultSet rs = ps.executeQuery();
             boolean first = true;
             while (rs.next()) {
-                if (!first) json.append(",");
+                if (!first)
+                    json.append(",");
                 json.append("{\"idEjercicio\":").append(rs.getInt("id_ejercicio"))
                         .append(",\"nombre\":\"").append(JsonUtil.escape(rs.getString("nombre_ejercicio")))
-                        .append("\",\"grupoMuscular\":\"").append(JsonUtil.escape(rs.getString("grupo_muscular"))).append("\"}");
+                        .append("\",\"grupoMuscular\":\"").append(JsonUtil.escape(rs.getString("grupo_muscular")))
+                        .append("\"}");
                 first = false;
             }
         } catch (Exception e) {
@@ -64,4 +65,19 @@ public class EjercicioDAO {
         return json.toString();
     }
 
+    public boolean crearEjercicio(String nombre, String grupoMuscular) {
+        if (nombre == null || nombre.trim().isEmpty())
+            return false;
+
+        try (Connection conn = ConexionDB.getConnection()) {
+            String sql = "INSERT INTO ejercicios (nombre_ejercicio, grupo_muscular) VALUES (?, ?)";
+            PreparedStatement ps = conn.prepareStatement(sql);
+            ps.setString(1, nombre.trim());
+            ps.setString(2, grupoMuscular != null ? grupoMuscular.trim() : "General");
+            return ps.executeUpdate() > 0;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
 }
