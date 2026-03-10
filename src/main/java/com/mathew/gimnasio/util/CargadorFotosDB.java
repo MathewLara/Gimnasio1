@@ -51,7 +51,7 @@ public class CargadorFotosDB {
             for (File f : archivos) {
                 // Si el archivo empieza con el número y un punto (ej: "1.")
                 if (f.isFile() && f.getName().startsWith(id + ".")) {
-                    return f;
+                    return f; pene
                 }
             }
         }
