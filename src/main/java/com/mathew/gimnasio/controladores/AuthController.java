@@ -8,7 +8,8 @@ import com.mathew.gimnasio.servicios.EmailService;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.ws.rs.core.Context;
 import java.util.Random;
 import java.util.regex.Pattern;
 import java.time.LocalDate;
@@ -170,18 +171,31 @@ public class AuthController {
      * @param credenciales Objeto con el usuario y la contraseña.
      */
     @POST
-    @Path("/login")
+    @Path("/login") // (O la ruta exacta que uses para iniciar sesión)
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    public Response login(Credenciales credenciales) {
-        // Busca al usuario en la BD comparando las credenciales
-        Usuario u = dao.login(credenciales.getUsuario(), credenciales.getContrasena());
-        if (u != null) {
-            // Solo permite el acceso si ya verificó su correo (isActivo == true)
-            if (u.isActivo()) return Response.ok(u).build();
-            return Response.status(403).entity("{\"mensaje\": \"Cuenta no verificada.\"}").build();
+    public Response login(Credenciales credenciales, @Context HttpServletRequest request) {
+
+        // 1. CAPTURAR LA IP DEL NAVEGADOR (Funciona en Render y en Local)
+        String ipReal = request.getHeader("X-Forwarded-For");
+        if (ipReal == null || ipReal.isEmpty()) {
+            ipReal = request.getRemoteAddr();
         }
-        return Response.status(401).entity("{\"mensaje\": \"Credenciales incorrectas\"}").build();
+
+        // 2. VALIDACIÓN NORMAL DE TU SISTEMA
+        // (Ajusta el nombre de la función 'dao.iniciarSesion' si tú le pusiste otro nombre como 'verificarUsuario')
+        Usuario usuario = dao.login(credenciales.getUsuario(), credenciales.getContrasena());
+
+        if (usuario != null) {
+            // ¡LOGIN EXITOSO! Guardamos la IP en la base de datos
+            dao.registrarLogAcceso(usuario.getIdUsuario(), ipReal, "Exitoso");
+
+            return Response.ok(usuario).build();
+        } else {
+            // Opcional: Si tienes forma de saber el ID del usuario que falló, lo pondrías aquí.
+            // Si no, no pasa nada, simplemente retornamos el error.
+            return Response.status(401).entity("{\"mensaje\":\"Credenciales incorrectas\"}").build();
+        }
     }
     /**
      * ENDPOINT: AGREGAR USUARIO DESDE ADMIN

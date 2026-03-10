@@ -21,7 +21,7 @@ public class AdminDAO {
                 if(rs.next()) dash.setTotalCuentas(rs.getInt(1));
             }
 
-            // 2. Sumar Ingresos (Todo lo que has cobrado)
+            // 2. Sumar Ingresos
             try(PreparedStatement ps = conn.prepareStatement("SELECT COALESCE(SUM(monto_pagado), 0) FROM pagos");
                 ResultSet rs = ps.executeQuery()) {
                 if(rs.next()) dash.setIngresos(rs.getDouble(1));

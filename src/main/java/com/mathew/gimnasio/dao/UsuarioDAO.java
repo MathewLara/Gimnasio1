@@ -391,6 +391,23 @@ public class UsuarioDAO {
             System.out.println("------------------------------------------------");
         } catch(Exception e) {}
     }
+    // ==========================================
+    // GUARDAR BITÁCORA DE ACCESOS (IP REAL)
+    // ==========================================
+    public void registrarLogAcceso(int idUsuario, String ip, String estado) {
+        String sql = "INSERT INTO logs_acceso (id_usuario, fecha_hora, ip, estado) VALUES (?, CURRENT_TIMESTAMP, ?, ?)";
+        try (Connection conn = ConexionDB.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, idUsuario);
+            ps.setString(2, ip);
+            ps.setString(3, estado);
+            ps.executeUpdate();
+
+        } catch (Exception e) {
+            System.out.println("Error al guardar el log de acceso: " + e.getMessage());
+        }
+    }
 
     // -------------------------------------------------------------------------
     // STUBS (Plantillas vacías)
