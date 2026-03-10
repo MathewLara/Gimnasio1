@@ -171,7 +171,7 @@ public class AuthController {
      * @param credenciales Objeto con el usuario y la contraseña.
      */
     @POST
-    @Path("/login") // (O la ruta exacta que uses para iniciar sesión)
+    @Path("/login")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public Response login(Credenciales credenciales, @Context HttpServletRequest request) {
@@ -182,8 +182,13 @@ public class AuthController {
             ipReal = request.getRemoteAddr();
         }
 
+        // BLINDAJE PARA RENDER: Recortamos la IP si es mayor a 48 caracteres
+        // para que no rompa el VARCHAR(50) de tu base de datos.
+        if (ipReal != null && ipReal.length() > 48) {
+            ipReal = ipReal.substring(0, 48);
+        }
+
         // 2. VALIDACIÓN NORMAL DE TU SISTEMA
-        // (Ajusta el nombre de la función 'dao.iniciarSesion' si tú le pusiste otro nombre como 'verificarUsuario')
         Usuario usuario = dao.login(credenciales.getUsuario(), credenciales.getContrasena());
 
         if (usuario != null) {
@@ -192,11 +197,10 @@ public class AuthController {
 
             return Response.ok(usuario).build();
         } else {
-            // Opcional: Si tienes forma de saber el ID del usuario que falló, lo pondrías aquí.
-            // Si no, no pasa nada, simplemente retornamos el error.
             return Response.status(401).entity("{\"mensaje\":\"Credenciales incorrectas\"}").build();
         }
     }
+
     /**
      * ENDPOINT: AGREGAR USUARIO DESDE ADMIN
      */
@@ -225,7 +229,8 @@ public class AuthController {
         }
         return Response.status(400).entity("{\"mensaje\": \"Error al actualizar\"}").build();
     }
-   /**
+
+    /**
      * ENDPOINT PARA EL DASHBOARD DEL ADMINISTRADOR
      * Devuelve las métricas reales de la base de datos.
      */
@@ -237,6 +242,7 @@ public class AuthController {
         String jsonReal = dao.getAdminStatsJSON();
         return Response.ok(jsonReal).build();
     }
+
     /**
      * ENDPOINT: LISTAR TODOS LOS USUARIOS
      */
