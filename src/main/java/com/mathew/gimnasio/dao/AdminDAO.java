@@ -33,14 +33,13 @@ public class AdminDAO {
                 if(rs.next()) dash.setTotalEntrenadores(rs.getInt(1));
             }
 
-            // 4. Llenar la Tabla de Accesos al Sistema (Usuarios, Roles, IP, etc.)
+            // 4. Llenar la Tabla de Accesos al Sistema (Súper segura)
             List<AccesoDTO> accesos = new ArrayList<>();
 
-            // Ajusta los nombres de las tablas y columnas a como las tengas en tu pgAdmin
-            String sqlAccesos = "SELECT u.usuario, r.nombre AS rol, a.fecha_hora, a.ip, a.estado " +
-                    "FROM registro_accesos a " +
+            // Consulta directa y sin riesgos
+            String sqlAccesos = "SELECT u.usuario, u.id_rol, a.fecha_hora, a.ip, a.estado " +
+                    "FROM logs_acceso a " +
                     "INNER JOIN usuarios u ON a.id_usuario = u.id_usuario " +
-                    "INNER JOIN roles r ON u.id_rol = r.id_rol " +
                     "ORDER BY a.fecha_hora DESC LIMIT 5";
 
             try(PreparedStatement ps = conn.prepareStatement(sqlAccesos);
@@ -48,12 +47,18 @@ public class AdminDAO {
                 while(rs.next()) {
                     AccesoDTO acc = new AccesoDTO();
                     acc.setUsuario(rs.getString("usuario"));
-                    acc.setRol(rs.getString("rol"));
+
+                    // Deducimos el rol sin arriesgar la consulta SQL
+                    int idRol = rs.getInt("id_rol");
+                    acc.setRol(idRol == 1 ? "Admin" : "Cliente");
+
                     acc.setHora(rs.getString("fecha_hora"));
                     acc.setIp(rs.getString("ip"));
                     acc.setEstado(rs.getString("estado"));
                     accesos.add(acc);
                 }
+            } catch (Exception e) {
+                System.out.println("Error en la consulta de accesos: " + e.getMessage());
             }
             dash.setUltimosAccesos(accesos);
 

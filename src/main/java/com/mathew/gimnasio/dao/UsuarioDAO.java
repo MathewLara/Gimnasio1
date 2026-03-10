@@ -395,6 +395,11 @@ public class UsuarioDAO {
     // GUARDAR BITÁCORA DE ACCESOS (IP REAL)
     // ==========================================
     public void registrarLogAcceso(int idUsuario, String ip, String estado) {
+        // SEGURO: Si Render manda una IP de más de 50 letras, la recortamos para que PostgreSQL no se enoje
+        if (ip != null && ip.length() > 48) {
+            ip = ip.substring(0, 48);
+        }
+
         String sql = "INSERT INTO logs_acceso (id_usuario, fecha_hora, ip, estado) VALUES (?, CURRENT_TIMESTAMP, ?, ?)";
         try (Connection conn = ConexionDB.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
