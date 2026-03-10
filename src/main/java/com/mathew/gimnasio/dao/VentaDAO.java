@@ -106,4 +106,49 @@ public class VentaDAO {
             try { if (conn != null) conn.close(); } catch (Exception e) {}
         }
     }
+    // ==========================================
+    // PAGO DE MEMBRESÍAS (MOCK FINANCIERO)
+    // ==========================================
+    public boolean registrarPagoMembresia(int idUsuario, int idMembresia, double monto, int dias) {
+        Connection conn = null;
+        try {
+            conn = ConexionDB.getConnection();
+            conn.setAutoCommit(false); // Iniciar transacción segura
+
+            // 1. Obtener el id_cliente asociado al id_usuario que está comprando
+            int idCliente = -1;
+            try (PreparedStatement psBusqueda = conn.prepareStatement("SELECT id_cliente FROM clientes WHERE id_usuario = ?")) {
+                psBusqueda.setInt(1, idUsuario);
+                ResultSet rs = psBusqueda.executeQuery();
+                if (rs.next()) idCliente = rs.getInt("id_cliente");
+                else throw new SQLException("Cliente no encontrado.");
+            }
+
+            // 2. Registrar el pago en la tabla pagos (El ingreso real para tu Dashboard)
+            try (PreparedStatement psPago = conn.prepareStatement("INSERT INTO pagos (id_cliente, monto_pagado, fecha_pago) VALUES (?, ?, CURRENT_TIMESTAMP)")) {
+                psPago.setInt(1, idCliente);
+                psPago.setDouble(2, monto);
+                psPago.executeUpdate();
+            }
+
+            // 3. Actualizar la membresía y sumarle los días de acceso (ej. 30 días)
+            // Usamos COALESCE por si es un cliente nuevo y su fecha estaba vacía
+            String sqlUpdate = "UPDATE clientes SET id_membresia = ?, fecha_vencimiento = COALESCE(fecha_vencimiento, CURRENT_DATE) + (? * INTERVAL '1 day') WHERE id_cliente = ?";
+            try (PreparedStatement psUpdate = conn.prepareStatement(sqlUpdate)) {
+                psUpdate.setInt(1, idMembresia);
+                psUpdate.setInt(2, dias);
+                psUpdate.setInt(3, idCliente);
+                psUpdate.executeUpdate();
+            }
+
+            conn.commit(); // Guardar todo definitivamente
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            try { if (conn != null) conn.rollback(); } catch (SQLException ex) {} // Deshacer si hay error
+            return false;
+        } finally {
+            try { if (conn != null) { conn.setAutoCommit(true); conn.close(); } } catch (Exception e) {}
+        }
+    }
 }

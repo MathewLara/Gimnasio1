@@ -2,6 +2,7 @@ package com.mathew.gimnasio.controladores;
 
 import com.mathew.gimnasio.dao.VentaDAO;
 import com.mathew.gimnasio.modelos.SolicitudVenta;
+import com.mathew.gimnasio.modelos.PagoMembresiaDTO;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -53,6 +54,26 @@ public class VentaController {
         } else {
             // Si hubo un error (ej. se cayó la base de datos), enviamos un error 500
             return Response.status(500).entity("{\"mensaje\":\"Error al guardar la venta en la base de datos\"}").build();
+        }
+    }
+    /**
+     * ENDPOINT: PAGO DE MEMBRESÍA
+     */
+    @POST
+    @Path("/membresia")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response pagarMembresia(PagoMembresiaDTO req) {
+        if (req.getIdUsuario() == 0 || req.getMonto() <= 0) {
+            return Response.status(400).entity("{\"mensaje\":\"Datos de pago inválidos\"}").build();
+        }
+
+        boolean exito = ventaDAO.registrarPagoMembresia(req.getIdUsuario(), req.getIdMembresia(), req.getMonto(), req.getDias());
+
+        if (exito) {
+            return Response.ok("{\"mensaje\":\"¡Pago exitoso y membresía renovada!\"}").build();
+        } else {
+            return Response.status(500).entity("{\"mensaje\":\"Error al procesar el pago en la BDD\"}").build();
         }
     }
 }
