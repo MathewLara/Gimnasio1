@@ -392,25 +392,33 @@ public class UsuarioDAO {
         } catch(Exception e) {}
     }
     // ==========================================
-    // GUARDAR BITÁCORA DE ACCESOS (IP REAL)
+    // GUARDAR BITÁCORA DE ACCESOS (CON AUTO-COMMIT FORZADO)
     // ==========================================
     public void registrarLogAcceso(int idUsuario, String ip, String estado) {
-        // SEGURO: Si Render manda una IP de más de 50 letras, la recortamos para que PostgreSQL no se enoje
+        // Blindaje de longitud de IP
         if (ip != null && ip.length() > 48) {
             ip = ip.substring(0, 48);
         }
 
         String sql = "INSERT INTO logs_acceso (id_usuario, fecha_hora, ip, estado) VALUES (?, CURRENT_TIMESTAMP, ?, ?)";
+
         try (Connection conn = ConexionDB.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            // ¡LA MAGIA! Forzamos a que PostgreSQL guarde el cambio inmediatamente
+            conn.setAutoCommit(true);
 
             ps.setInt(1, idUsuario);
             ps.setString(2, ip);
             ps.setString(3, estado);
-            ps.executeUpdate();
+
+            // Ejecutamos la inserción
+            int filasAfectadas = ps.executeUpdate();
+            System.out.println("Log guardado. Filas afectadas: " + filasAfectadas);
 
         } catch (Exception e) {
-            System.out.println("Error al guardar el log de acceso: " + e.getMessage());
+            System.out.println("Error CRÍTICO al guardar el log de acceso: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
