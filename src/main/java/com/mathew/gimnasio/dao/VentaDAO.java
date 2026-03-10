@@ -115,13 +115,19 @@ public class VentaDAO {
             conn = ConexionDB.getConnection();
             conn.setAutoCommit(false); // Iniciar transacción segura
 
+            System.out.println("INICIANDO PAGO: Usuario ID " + idUsuario + " | Plan ID " + idMembresia);
+
             // 1. Obtener el id_cliente asociado al id_usuario que está comprando
             int idCliente = -1;
             try (PreparedStatement psBusqueda = conn.prepareStatement("SELECT id_cliente FROM clientes WHERE id_usuario = ?")) {
                 psBusqueda.setInt(1, idUsuario);
                 ResultSet rs = psBusqueda.executeQuery();
-                if (rs.next()) idCliente = rs.getInt("id_cliente");
-                else throw new SQLException("Cliente no encontrado.");
+                if (rs.next()) {
+                    idCliente = rs.getInt("id_cliente");
+                } else {
+                    System.out.println("ERROR: El usuario " + idUsuario + " no existe en la tabla 'clientes'.");
+                    throw new SQLException("Cliente no encontrado.");
+                }
             }
 
             // 2. Registrar el pago en la tabla pagos (El ingreso real para tu Dashboard)
@@ -131,19 +137,22 @@ public class VentaDAO {
                 psPago.executeUpdate();
             }
 
-            // 3. Actualizar la membresía y sumarle los días de acceso (ej. 30 días)
-            // Usamos COALESCE por si es un cliente nuevo y su fecha estaba vacía
-            String sqlUpdate = "UPDATE clientes SET id_membresia = ?, fecha_vencimiento = COALESCE(fecha_vencimiento, CURRENT_DATE) + (? * INTERVAL '1 day') WHERE id_cliente = ?";
+            // 3. Actualizar la membresía y sumarle los días de acceso
+            // PostgreSQL suma días automáticamente si le sumas un número entero a una fecha (DATE)
+            String sqlUpdate = "UPDATE clientes SET id_membresia = ?, fecha_vencimiento = COALESCE(fecha_vencimiento, CURRENT_DATE) + ? WHERE id_cliente = ?";
             try (PreparedStatement psUpdate = conn.prepareStatement(sqlUpdate)) {
                 psUpdate.setInt(1, idMembresia);
-                psUpdate.setInt(2, dias);
+                psUpdate.setInt(2, dias); // Se suma como un entero simple
                 psUpdate.setInt(3, idCliente);
                 psUpdate.executeUpdate();
             }
 
             conn.commit(); // Guardar todo definitivamente
+            System.out.println("¡ÉXITO! Membresía renovada en la base de datos.");
             return true;
+
         } catch (Exception e) {
+            System.out.println("ERROR CRÍTICO AL GUARDAR EN BASE DE DATOS:");
             e.printStackTrace();
             try { if (conn != null) conn.rollback(); } catch (SQLException ex) {} // Deshacer si hay error
             return false;
