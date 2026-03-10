@@ -109,53 +109,44 @@ public class VentaDAO {
     // ==========================================
     // PAGO DE MEMBRESÍAS (MOCK FINANCIERO)
     // ==========================================
-    public boolean registrarPagoMembresia(int idUsuario, int idMembresia, double monto, int dias) {
+    public String registrarPagoMembresia(int idUsuario, int idMembresia, double monto, int dias) {
         Connection conn = null;
         try {
             conn = ConexionDB.getConnection();
-            conn.setAutoCommit(false); // Iniciar transacción segura
+            conn.setAutoCommit(false); // Iniciar transacción
 
-            System.out.println("INICIANDO PAGO: Usuario ID " + idUsuario + " | Plan ID " + idMembresia);
-
-            // 1. Obtener el id_cliente asociado al id_usuario que está comprando
+            // 1. Obtener el id_cliente
             int idCliente = -1;
-            try (PreparedStatement psBusqueda = conn.prepareStatement("SELECT id_cliente FROM clientes WHERE id_usuario = ?")) {
-                psBusqueda.setInt(1, idUsuario);
-                ResultSet rs = psBusqueda.executeQuery();
-                if (rs.next()) {
-                    idCliente = rs.getInt("id_cliente");
-                } else {
-                    System.out.println("ERROR: El usuario " + idUsuario + " no existe en la tabla 'clientes'.");
-                    throw new SQLException("Cliente no encontrado.");
-                }
+            try (PreparedStatement ps = conn.prepareStatement("SELECT id_cliente FROM clientes WHERE id_usuario = ?")) {
+                ps.setInt(1, idUsuario);
+                ResultSet rs = ps.executeQuery();
+                if (rs.next()) idCliente = rs.getInt("id_cliente");
+                else throw new SQLException("El usuario logueado no tiene un perfil en la tabla 'clientes'.");
             }
 
-            // 2. Registrar el pago en la tabla pagos (El ingreso real para tu Dashboard)
-            try (PreparedStatement psPago = conn.prepareStatement("INSERT INTO pagos (id_cliente, monto_pagado, fecha_pago) VALUES (?, ?, CURRENT_TIMESTAMP)")) {
-                psPago.setInt(1, idCliente);
-                psPago.setDouble(2, monto);
-                psPago.executeUpdate();
+            // 2. Registrar el pago (¡CORREGIDO! Usamos id_membresia y metodo_pago como lo pide tu SQL)
+            try (PreparedStatement ps = conn.prepareStatement("INSERT INTO pagos (id_membresia, monto_pagado, metodo_pago, fecha_pago) VALUES (?, ?, 'TARJETA WEB', CURRENT_TIMESTAMP)")) {
+                ps.setInt(1, idMembresia);
+                ps.setDouble(2, monto);
+                ps.executeUpdate();
             }
 
-            // 3. Actualizar la membresía y sumarle los días de acceso
-            // PostgreSQL suma días automáticamente si le sumas un número entero a una fecha (DATE)
+            // 3. Actualizar la membresía sumando días automáticamente
             String sqlUpdate = "UPDATE clientes SET id_membresia = ?, fecha_vencimiento = COALESCE(fecha_vencimiento, CURRENT_DATE) + ? WHERE id_cliente = ?";
-            try (PreparedStatement psUpdate = conn.prepareStatement(sqlUpdate)) {
-                psUpdate.setInt(1, idMembresia);
-                psUpdate.setInt(2, dias); // Se suma como un entero simple
-                psUpdate.setInt(3, idCliente);
-                psUpdate.executeUpdate();
+            try (PreparedStatement ps = conn.prepareStatement(sqlUpdate)) {
+                ps.setInt(1, idMembresia);
+                ps.setInt(2, dias); // Sumamos los días como un número entero normal
+                ps.setInt(3, idCliente);
+                ps.executeUpdate();
             }
 
-            conn.commit(); // Guardar todo definitivamente
-            System.out.println("¡ÉXITO! Membresía renovada en la base de datos.");
-            return true;
+            conn.commit();
+            return "OK"; // Todo salió perfecto
 
         } catch (Exception e) {
-            System.out.println("ERROR CRÍTICO AL GUARDAR EN BASE DE DATOS:");
             e.printStackTrace();
-            try { if (conn != null) conn.rollback(); } catch (SQLException ex) {} // Deshacer si hay error
-            return false;
+            try { if (conn != null) conn.rollback(); } catch (SQLException ex) {}
+            return "Error BD: " + e.getMessage();
         } finally {
             try { if (conn != null) { conn.setAutoCommit(true); conn.close(); } } catch (Exception e) {}
         }
