@@ -68,12 +68,14 @@ public class VentaController {
             return Response.status(400).entity("{\"mensaje\":\"Datos de pago inválidos\"}").build();
         }
 
-        boolean exito = ventaDAO.registrarPagoMembresia(req.getIdUsuario(), req.getIdMembresia(), req.getMonto(), req.getDias());
+        // AQUÍ ESTÁ LA MAGIA: Cambiamos 'boolean exito' por 'String resultado'
+        String resultado = ventaDAO.registrarPagoMembresia(req.getIdUsuario(), req.getIdMembresia(), req.getMonto(), req.getDias());
 
-        if (exito) {
+        if (resultado.equals("OK")) {
             return Response.ok("{\"mensaje\":\"¡Pago exitoso y membresía renovada!\"}").build();
         } else {
-            return Response.status(500).entity("{\"mensaje\":\"Error al procesar el pago en la BDD\"}").build();
+            // Mandamos el error de la base de datos directo a la web
+            return Response.status(500).entity("{\"mensaje\":\"" + resultado + "\"}").build();
         }
     }
 }
