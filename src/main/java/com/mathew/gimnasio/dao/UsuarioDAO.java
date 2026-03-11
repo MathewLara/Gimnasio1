@@ -239,11 +239,17 @@ public class UsuarioDAO {
     // GESTIÓN DE USUARIOS (PANEL ADMIN)
     // ==========================================
 
-    // 1. Listar todos los usuarios con sus roles
+    // 1. Listar todos los usuarios con sus roles (AHORA EXTRAE CORREO Y TELÉFONO)
     public String obtenerUsuariosParaAdminJSON() {
         StringBuilder json = new StringBuilder("[");
-        String sql = "SELECT u.id_usuario, u.usuario, u.nombre, u.apellido, u.activo, r.nombre_rol " +
-                "FROM usuarios u INNER JOIN roles r ON u.id_rol = r.id_rol " +
+        // Hacemos un JOIN para traer el email y teléfono de clientes o entrenadores
+        String sql = "SELECT u.id_usuario, u.usuario, u.nombre, u.apellido, u.activo, r.nombre_rol, " +
+                "COALESCE(c.email, e.email) as email, " +
+                "COALESCE(c.telefono, e.telefono) as telefono " +
+                "FROM usuarios u " +
+                "INNER JOIN roles r ON u.id_rol = r.id_rol " +
+                "LEFT JOIN clientes c ON u.id_usuario = c.id_usuario " +
+                "LEFT JOIN entrenadores e ON u.id_usuario = e.id_usuario " +
                 "ORDER BY u.id_rol ASC, u.id_usuario DESC";
 
         try (Connection conn = ConexionDB.getConnection();
@@ -258,7 +264,9 @@ public class UsuarioDAO {
                         .append("\"nombre\":\"").append(rs.getString("nombre") != null ? rs.getString("nombre") : "").append("\",")
                         .append("\"apellido\":\"").append(rs.getString("apellido") != null ? rs.getString("apellido") : "").append("\",")
                         .append("\"rol\":\"").append(rs.getString("nombre_rol")).append("\",")
-                        .append("\"activo\":").append(rs.getBoolean("activo"))
+                        .append("\"activo\":").append(rs.getBoolean("activo")).append(",")
+                        .append("\"email\":\"").append(rs.getString("email") != null ? rs.getString("email") : "").append("\",")
+                        .append("\"telefono\":\"").append(rs.getString("telefono") != null ? rs.getString("telefono") : "").append("\"")
                         .append("}");
                 first = false;
             }
@@ -278,7 +286,7 @@ public class UsuarioDAO {
         } catch (Exception e) { return false; }
     }
 
-    // 3. AGREGAR NUEVO PERSONAL / USUARIO (AHORA CON TRANSACCIÓN MÚLTIPLE)
+    // 3. AGREGAR NUEVO PERSONAL / USUARIO (CON CORREO Y TELÉFONO)
     public boolean agregarPersonalAdmin(Usuario u) {
         Connection conn = null;
         try {
@@ -308,21 +316,25 @@ public class UsuarioDAO {
                 return false;
             }
 
-            // B. Insertar en la tabla hija correspondiente
+            // B. Insertar en la tabla hija correspondiente con Email y Teléfono
             if (u.getIdRol() == 4) { // Cliente
-                String sqlCli = "INSERT INTO clientes (id_usuario, nombre, apellido) VALUES (?, ?, ?)";
+                String sqlCli = "INSERT INTO clientes (id_usuario, nombre, apellido, email, telefono) VALUES (?, ?, ?, ?, ?)";
                 try (PreparedStatement psCli = conn.prepareStatement(sqlCli)) {
                     psCli.setInt(1, nuevoIdUsuario);
                     psCli.setString(2, u.getNombre());
                     psCli.setString(3, u.getApellido());
+                    psCli.setString(4, u.getEmail());
+                    psCli.setString(5, u.getTelefono());
                     psCli.executeUpdate();
                 }
             } else if (u.getIdRol() == 3) { // Entrenador
-                String sqlEnt = "INSERT INTO entrenadores (id_usuario, nombre, apellido) VALUES (?, ?, ?)";
+                String sqlEnt = "INSERT INTO entrenadores (id_usuario, nombre, apellido, email, telefono) VALUES (?, ?, ?, ?, ?)";
                 try (PreparedStatement psEnt = conn.prepareStatement(sqlEnt)) {
                     psEnt.setInt(1, nuevoIdUsuario);
                     psEnt.setString(2, u.getNombre());
                     psEnt.setString(3, u.getApellido());
+                    psEnt.setString(4, u.getEmail());
+                    psEnt.setString(5, u.getTelefono());
                     psEnt.executeUpdate();
                 }
             }
@@ -339,7 +351,7 @@ public class UsuarioDAO {
         }
     }
 
-    // 4. EDITAR USUARIO (AHORA CON TRANSACCIÓN MÚLTIPLE)
+    // 4. EDITAR USUARIO (CON CORREO Y TELÉFONO)
     public boolean editarPersonalAdmin(Usuario u) {
         Connection conn = null;
         try {
@@ -370,19 +382,23 @@ public class UsuarioDAO {
 
             // B. Actualizar también en la tabla hija
             if (u.getIdRol() == 4) {
-                String sqlCli = "UPDATE clientes SET nombre=?, apellido=? WHERE id_usuario=?";
+                String sqlCli = "UPDATE clientes SET nombre=?, apellido=?, email=?, telefono=? WHERE id_usuario=?";
                 try (PreparedStatement psCli = conn.prepareStatement(sqlCli)) {
                     psCli.setString(1, u.getNombre());
                     psCli.setString(2, u.getApellido());
-                    psCli.setInt(3, u.getIdUsuario());
+                    psCli.setString(3, u.getEmail());
+                    psCli.setString(4, u.getTelefono());
+                    psCli.setInt(5, u.getIdUsuario());
                     psCli.executeUpdate();
                 }
             } else if (u.getIdRol() == 3) {
-                String sqlEnt = "UPDATE entrenadores SET nombre=?, apellido=? WHERE id_usuario=?";
+                String sqlEnt = "UPDATE entrenadores SET nombre=?, apellido=?, email=?, telefono=? WHERE id_usuario=?";
                 try (PreparedStatement psEnt = conn.prepareStatement(sqlEnt)) {
                     psEnt.setString(1, u.getNombre());
                     psEnt.setString(2, u.getApellido());
-                    psEnt.setInt(3, u.getIdUsuario());
+                    psEnt.setString(3, u.getEmail());
+                    psEnt.setString(4, u.getTelefono());
+                    psEnt.setInt(5, u.getIdUsuario());
                     psEnt.executeUpdate();
                 }
             }
