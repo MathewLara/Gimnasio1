@@ -13,14 +13,17 @@ public class RecepcionDAO {
 
         try (Connection conn = ConexionDB.getConnection()) {
 
+            // 1. Ingresos en Caja (SOLO DE HOY)
             double cajaHoy = 0.0;
             String sqlCaja = "SELECT COALESCE(SUM(monto_pagado), 0) FROM pagos WHERE DATE(fecha_pago) = CURRENT_DATE";
             try(PreparedStatement ps = conn.prepareStatement(sqlCaja); ResultSet rs = ps.executeQuery()) {
                 if(rs.next()) cajaHoy = rs.getDouble(1);
             }
 
+            // 2. Personas Entrenando (Aforo actual)
+            // USANDO: fecha_hora_ingreso y fecha_hora_salida
             int aforoHoy = 0;
-            String sqlAforo = "SELECT COUNT(*) FROM asistencias WHERE fecha = CURRENT_DATE AND hora_salida IS NULL";
+            String sqlAforo = "SELECT COUNT(*) FROM asistencias WHERE DATE(fecha_hora_ingreso) = CURRENT_DATE AND fecha_hora_salida IS NULL";
             try(PreparedStatement ps = conn.prepareStatement(sqlAforo); ResultSet rs = ps.executeQuery()) {
                 if(rs.next()) aforoHoy = rs.getInt(1);
             }
@@ -30,24 +33,29 @@ public class RecepcionDAO {
                     .append("\"aforoHoy\": ").append(aforoHoy)
                     .append("},");
 
+            // 3. Actividad Reciente FÍSICA
             json.append("\"actividadReciente\": [");
-            String sqlActividad = "SELECT u.usuario, a.hora_entrada, a.hora_salida " +
-                    "FROM asistencias a INNER JOIN usuarios u ON a.id_usuario = u.id_usuario " +
-                    "WHERE a.fecha = CURRENT_DATE " +
-                    "ORDER BY COALESCE(a.hora_salida, a.hora_entrada) DESC LIMIT 5";
+            String sqlActividad = "SELECT u.usuario, a.fecha_hora_ingreso, a.fecha_hora_salida " +
+                    "FROM asistencias a " +
+                    "INNER JOIN clientes c ON a.id_cliente = c.id_cliente " +
+                    "INNER JOIN usuarios u ON c.id_usuario = u.id_usuario " +
+                    "WHERE DATE(a.fecha_hora_ingreso) = CURRENT_DATE " +
+                    "ORDER BY COALESCE(a.fecha_hora_salida, a.fecha_hora_ingreso) DESC LIMIT 5";
+
             try(PreparedStatement ps = conn.prepareStatement(sqlActividad); ResultSet rs = ps.executeQuery()) {
                 boolean first = true;
                 while(rs.next()) {
                     if(!first) json.append(",");
 
-                    String horaIn = rs.getString("hora_entrada");
-                    String horaOut = rs.getString("hora_salida");
+                    String horaIn = rs.getString("fecha_hora_ingreso");
+                    String horaOut = rs.getString("fecha_hora_salida");
 
                     boolean esSalida = (horaOut != null);
                     String horaMovimiento = esSalida ? horaOut : horaIn;
 
-                    if(horaMovimiento != null && horaMovimiento.length() >= 5) {
-                        horaMovimiento = horaMovimiento.substring(0, 5);
+                    // Extraemos solo la hora (ej. 14:30) del timestamp (ej. 2026-03-11 14:30:00)
+                    if(horaMovimiento != null && horaMovimiento.length() >= 16) {
+                        horaMovimiento = horaMovimiento.substring(11, 16);
                     }
 
                     json.append("{")
@@ -76,26 +84,20 @@ public class RecepcionDAO {
         try (Connection conn = ConexionDB.getConnection()) {
 
             int idUsuario = -1;
+            int idCliente = -1;
             boolean activo = false;
             String nombreUsuario = "";
 
             String paramLimpio = identificador.trim().toLowerCase();
             int idBuscado = -1;
 
-            // ¡MAGIA!: Si el QR dice "iron_19", extraemos solo el número "19"
             if (paramLimpio.startsWith("iron_")) {
-                try {
-                    idBuscado = Integer.parseInt(paramLimpio.substring(5));
-                } catch (Exception e) {}
+                try { idBuscado = Integer.parseInt(paramLimpio.substring(5)); } catch (Exception e) {}
             } else {
-                // Por si tipean el número directamente (Ej: "19")
-                try {
-                    idBuscado = Integer.parseInt(paramLimpio);
-                } catch (Exception e) {}
+                try { idBuscado = Integer.parseInt(paramLimpio); } catch (Exception e) {}
             }
 
-            // Ahora la consulta busca por Usuario, Email o directamente por ID
-            String sqlUser = "SELECT u.id_usuario, u.usuario, u.activo " +
+            String sqlUser = "SELECT u.id_usuario, c.id_cliente, u.usuario, u.activo " +
                     "FROM usuarios u " +
                     "LEFT JOIN clientes c ON u.id_usuario = c.id_usuario " +
                     "LEFT JOIN entrenadores e ON u.id_usuario = e.id_usuario " +
@@ -110,6 +112,7 @@ public class RecepcionDAO {
                 ResultSet rs = ps.executeQuery();
                 if(rs.next()) {
                     idUsuario = rs.getInt("id_usuario");
+                    idCliente = rs.getInt("id_cliente");
                     nombreUsuario = rs.getString("usuario");
                     activo = rs.getBoolean("activo");
                 }
@@ -117,28 +120,31 @@ public class RecepcionDAO {
 
             if (idUsuario == -1) return "{\"status\":\"error\", \"mensaje\":\"Usuario no encontrado en la base de datos.\"}";
             if (!activo) return "{\"status\":\"error\", \"mensaje\":\"El usuario está inactivo. Verifique sus pagos.\"}";
+            if (idCliente <= 0) return "{\"status\":\"error\", \"mensaje\":\"El usuario existe pero no está registrado como cliente.\"}";
 
             int idAsistencia = -1;
-            String sqlCheck = "SELECT id_asistencia FROM asistencias WHERE id_usuario = ? AND fecha = CURRENT_DATE AND hora_salida IS NULL";
+            // BUSCAMOS ENTRADA SIN SALIDA DE HOY (Usando fecha_hora_ingreso y fecha_hora_salida)
+            String sqlCheck = "SELECT id_asistencia FROM asistencias WHERE id_cliente = ? AND DATE(fecha_hora_ingreso) = CURRENT_DATE AND fecha_hora_salida IS NULL";
             try(PreparedStatement ps = conn.prepareStatement(sqlCheck)) {
-                ps.setInt(1, idUsuario);
+                ps.setInt(1, idCliente);
                 ResultSet rs = ps.executeQuery();
                 if(rs.next()) idAsistencia = rs.getInt("id_asistencia");
             }
 
             if (idAsistencia != -1) {
-                // TIENE ENTRADA ABIERTA -> SALIDA
-                String sqlOut = "UPDATE asistencias SET hora_salida = CURRENT_TIME WHERE id_asistencia = ?";
+                // SALIDA (Actualizamos fecha_hora_salida a CURRENT_TIMESTAMP)
+                String sqlOut = "UPDATE asistencias SET fecha_hora_salida = CURRENT_TIMESTAMP WHERE id_asistencia = ?";
                 try(PreparedStatement ps = conn.prepareStatement(sqlOut)) {
                     ps.setInt(1, idAsistencia);
                     ps.executeUpdate();
                 }
                 return "{\"status\":\"ok\", \"tipo\":\"Salida\", \"mensaje\":\"¡Hasta pronto, " + nombreUsuario + "! Salida registrada.\"}";
             } else {
-                // NO TIENE ENTRADA ABIERTA -> ENTRADA
-                String sqlIn = "INSERT INTO asistencias (id_usuario, fecha, hora_entrada) VALUES (?, CURRENT_DATE, CURRENT_TIME)";
+                // ENTRADA (Insertamos fecha_hora_ingreso como CURRENT_TIMESTAMP y llenamos los datos del QR)
+                String sqlIn = "INSERT INTO asistencias (id_cliente, fecha_hora_ingreso, dispositivo_qr, codigo_validado) VALUES (?, CURRENT_TIMESTAMP, 'Escáner Recepción', ?)";
                 try(PreparedStatement ps = conn.prepareStatement(sqlIn)) {
-                    ps.setInt(1, idUsuario);
+                    ps.setInt(1, idCliente);
+                    ps.setString(2, identificador.trim()); // Guardamos qué escaneó exactamente
                     ps.executeUpdate();
                 }
                 return "{\"status\":\"ok\", \"tipo\":\"Entrada\", \"mensaje\":\"¡Bienvenido a entrenar, " + nombreUsuario + "! Entrada registrada.\"}";
