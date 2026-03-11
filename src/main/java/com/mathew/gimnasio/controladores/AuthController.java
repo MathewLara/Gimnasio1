@@ -264,6 +264,17 @@ public class AuthController {
         if (exito) return Response.ok("{\"mensaje\": \"Estado actualizado correctamente\"}").build();
         return Response.status(400).entity("{\"mensaje\": \"Error al actualizar\"}").build();
     }
+    /**
+     * ENDPOINT PARA REPORTES GERENCIALES
+     * Devuelve las métricas, ingresos y datos para los gráficos del dashboard.
+     */
+    @GET
+    @Path("/admin/reportes")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response getReportesAdmin() {
+        String jsonReportes = dao.getReportesJSON();
+        return Response.ok(jsonReportes).build();
+    }
 
     /**
      * FORMATEADOR DE ERRORES

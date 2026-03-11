@@ -222,10 +222,8 @@ public class UsuarioDAO {
     // GESTIÓN DE USUARIOS (PANEL ADMIN)
     // ==========================================
 
-    // 1. LISTAR USUARIOS (CORREGIDO PARA NO PEDIR TELÉFONO A ENTRENADORES)
     public String obtenerUsuariosParaAdminJSON() {
         StringBuilder json = new StringBuilder("[");
-        // ATENCIÓN: Solo extraemos c.telefono de los clientes, porque entrenadores no tiene esa columna.
         String sql = "SELECT u.id_usuario, u.usuario, u.nombre, u.apellido, u.activo, r.nombre_rol, " +
                 "COALESCE(c.email, e.email) as email, " +
                 "c.telefono as telefono " +
@@ -258,7 +256,6 @@ public class UsuarioDAO {
         return json.toString();
     }
 
-    // 2. Eliminado Lógico
     public boolean cambiarEstadoUsuario(int idUsuario, boolean nuevoEstado) {
         String sql = "UPDATE usuarios SET activo = ? WHERE id_usuario = ?";
         try (Connection conn = ConexionDB.getConnection();
@@ -269,7 +266,6 @@ public class UsuarioDAO {
         } catch (Exception e) { return false; }
     }
 
-    // 3. AGREGAR NUEVO USUARIO (CORREGIDO PARA ENTRENADORES)
     public boolean agregarPersonalAdmin(Usuario u) {
         Connection conn = null;
         try {
@@ -298,7 +294,7 @@ public class UsuarioDAO {
                 return false;
             }
 
-            if (u.getIdRol() == 4) { // Cliente (Con Email y Teléfono)
+            if (u.getIdRol() == 4) { // Cliente
                 String sqlCli = "INSERT INTO clientes (id_usuario, nombre, apellido, email, telefono) VALUES (?, ?, ?, ?, ?)";
                 try (PreparedStatement psCli = conn.prepareStatement(sqlCli)) {
                     psCli.setInt(1, nuevoIdUsuario);
@@ -308,7 +304,7 @@ public class UsuarioDAO {
                     psCli.setString(5, u.getTelefono());
                     psCli.executeUpdate();
                 }
-            } else if (u.getIdRol() == 3) { // Entrenador (Solo con Email, SIN Teléfono)
+            } else if (u.getIdRol() == 3) { // Entrenador
                 String sqlEnt = "INSERT INTO entrenadores (id_usuario, nombre, apellido, email) VALUES (?, ?, ?, ?)";
                 try (PreparedStatement psEnt = conn.prepareStatement(sqlEnt)) {
                     psEnt.setInt(1, nuevoIdUsuario);
@@ -331,7 +327,6 @@ public class UsuarioDAO {
         }
     }
 
-    // 4. EDITAR USUARIO (CORREGIDO PARA ENTRENADORES)
     public boolean editarPersonalAdmin(Usuario u) {
         Connection conn = null;
         try {
@@ -359,7 +354,7 @@ public class UsuarioDAO {
                 ps.executeUpdate();
             }
 
-            if (u.getIdRol() == 4) { // Cliente (Actualiza Teléfono)
+            if (u.getIdRol() == 4) {
                 String sqlCli = "UPDATE clientes SET nombre=?, apellido=?, email=?, telefono=? WHERE id_usuario=?";
                 try (PreparedStatement psCli = conn.prepareStatement(sqlCli)) {
                     psCli.setString(1, u.getNombre());
@@ -369,7 +364,7 @@ public class UsuarioDAO {
                     psCli.setInt(5, u.getIdUsuario());
                     psCli.executeUpdate();
                 }
-            } else if (u.getIdRol() == 3) { // Entrenador (No actualiza Teléfono)
+            } else if (u.getIdRol() == 3) {
                 String sqlEnt = "UPDATE entrenadores SET nombre=?, apellido=?, email=? WHERE id_usuario=?";
                 try (PreparedStatement psEnt = conn.prepareStatement(sqlEnt)) {
                     psEnt.setString(1, u.getNombre());
@@ -392,9 +387,6 @@ public class UsuarioDAO {
         }
     }
 
-    // ==========================================
-    // GUARDAR BITÁCORA DE ACCESOS
-    // ==========================================
     public void registrarLogAcceso(int idUsuario, String ip, String estado) {
         if (ip != null && ip.length() > 45) {
             ip = ip.substring(0, 45);
@@ -418,6 +410,84 @@ public class UsuarioDAO {
         } catch (Exception e) {
             System.out.println("Error al guardar el log: " + e.getMessage());
         }
+    }
+
+    // ==========================================
+    // NUEVO MÓDULO: REPORTES GERENCIALES
+    // ==========================================
+    public String getReportesJSON() {
+        StringBuilder json = new StringBuilder("{");
+
+        try (Connection conn = ConexionDB.getConnection()) {
+
+            // 1. Métricas de Usuarios (Total vs Activos)
+            int totalClientes = 0;
+            int clientesActivos = 0;
+            try(PreparedStatement ps = conn.prepareStatement("SELECT COUNT(*) FROM usuarios WHERE id_rol = 4");
+                ResultSet rs = ps.executeQuery()) {
+                if(rs.next()) totalClientes = rs.getInt(1);
+            }
+            try(PreparedStatement ps = conn.prepareStatement("SELECT COUNT(*) FROM usuarios WHERE id_rol = 4 AND activo = TRUE");
+                ResultSet rs = ps.executeQuery()) {
+                if(rs.next()) clientesActivos = rs.getInt(1);
+            }
+
+            // 2. Dinero Recaudado (Total Histórico y Mes Actual)
+            // Nota: Se asume que la columna de fecha en la tabla 'pagos' se llama 'fecha_pago'
+            double ingresosTotales = 0.0;
+            double ingresosMes = 0.0;
+            try(PreparedStatement ps = conn.prepareStatement("SELECT COALESCE(SUM(monto_pagado), 0) FROM pagos");
+                ResultSet rs = ps.executeQuery()) {
+                if(rs.next()) ingresosTotales = rs.getDouble(1);
+            }
+            try(PreparedStatement ps = conn.prepareStatement("SELECT COALESCE(SUM(monto_pagado), 0) FROM pagos WHERE EXTRACT(MONTH FROM fecha_pago) = EXTRACT(MONTH FROM CURRENT_DATE) AND EXTRACT(YEAR FROM fecha_pago) = EXTRACT(YEAR FROM CURRENT_DATE)");
+                ResultSet rs = ps.executeQuery()) {
+                if(rs.next()) ingresosMes = rs.getDouble(1);
+            }
+
+            // 3. Ingresos por Método de Pago (Para Gráfico de Dona)
+            json.append("\"ingresosPorMetodo\": [");
+            String sqlMetodos = "SELECT metodo_pago, COALESCE(SUM(monto_pagado), 0) as total FROM pagos GROUP BY metodo_pago";
+            try(PreparedStatement ps = conn.prepareStatement(sqlMetodos); ResultSet rs = ps.executeQuery()) {
+                boolean first = true;
+                while(rs.next()) {
+                    if(!first) json.append(",");
+                    String metodo = rs.getString("metodo_pago");
+                    if (metodo == null) metodo = "Otro";
+                    json.append("{\"metodo\": \"").append(metodo).append("\", \"total\": ").append(rs.getDouble("total")).append("}");
+                    first = false;
+                }
+            }
+            json.append("],");
+
+            // 4. Membresías más populares (Para Gráfico de Barras)
+            json.append("\"membresiasPopulares\": [");
+            String sqlMembresias = "SELECT m.nombre, COUNT(p.id_pago) as cantidad FROM pagos p JOIN membresias m ON p.id_membresia = m.id_membresia GROUP BY m.nombre";
+            try(PreparedStatement ps = conn.prepareStatement(sqlMembresias); ResultSet rs = ps.executeQuery()) {
+                boolean first = true;
+                while(rs.next()) {
+                    if(!first) json.append(",");
+                    json.append("{\"nombre\": \"").append(rs.getString("nombre")).append("\", \"cantidad\": ").append(rs.getInt("cantidad")).append("}");
+                    first = false;
+                }
+            }
+            json.append("],");
+
+            // 5. Agregamos las métricas sueltas al JSON para que JS las dibuje
+            json.append("\"kpis\": {")
+                    .append("\"totalClientes\": ").append(totalClientes).append(",")
+                    .append("\"clientesActivos\": ").append(clientesActivos).append(",")
+                    .append("\"ingresosTotales\": ").append(ingresosTotales).append(",")
+                    .append("\"ingresosMes\": ").append(ingresosMes)
+                    .append("}");
+
+        } catch (Exception e) {
+            System.out.println("Error en reportes: " + e.getMessage());
+            // Si hay error (ej. tabla no existe), enviamos vacío para que no colapse el JS
+            return "{\"ingresosPorMetodo\": [], \"membresiasPopulares\": [], \"kpis\": {}}";
+        }
+        json.append("}");
+        return json.toString();
     }
 
     // -------------------------------------------------------------------------
