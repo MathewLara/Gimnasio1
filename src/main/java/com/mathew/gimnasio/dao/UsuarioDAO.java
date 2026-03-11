@@ -395,30 +395,30 @@ public class UsuarioDAO {
     // GUARDAR BITÁCORA DE ACCESOS (CON AUTO-COMMIT FORZADO)
     // ==========================================
     public void registrarLogAcceso(int idUsuario, String ip, String estado) {
-        // Blindaje de longitud de IP
-        if (ip != null && ip.length() > 48) {
-            ip = ip.substring(0, 48);
+        // La BD pide un VARCHAR(45) para la direccion_ip
+        if (ip != null && ip.length() > 45) {
+            ip = ip.substring(0, 45);
         }
 
-        String sql = "INSERT INTO logs_acceso (id_usuario, fecha_hora, ip, estado) VALUES (?, CURRENT_TIMESTAMP, ?, ?)";
+        // Tu columna "exitoso" es un boolean (true/false), así que lo convertimos
+        boolean esExitoso = (estado != null && estado.equalsIgnoreCase("Exitoso"));
+
+        // COLUMNAS REALES: fecha_hora_log, direccion_ip, tipo_dispositivo, exitoso
+        String sql = "INSERT INTO logs_acceso (id_usuario, fecha_hora_log, direccion_ip, tipo_dispositivo, exitoso) VALUES (?, CURRENT_TIMESTAMP, ?, 'Navegador Web', ?)";
 
         try (Connection conn = ConexionDB.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
-            // ¡LA MAGIA! Forzamos a que PostgreSQL guarde el cambio inmediatamente
             conn.setAutoCommit(true);
 
             ps.setInt(1, idUsuario);
             ps.setString(2, ip);
-            ps.setString(3, estado);
+            ps.setBoolean(3, esExitoso); // Mandamos true o false como pide PostgreSQL
 
-            // Ejecutamos la inserción
-            int filasAfectadas = ps.executeUpdate();
-            System.out.println("Log guardado. Filas afectadas: " + filasAfectadas);
+            ps.executeUpdate();
 
         } catch (Exception e) {
-            System.out.println("Error CRÍTICO al guardar el log de acceso: " + e.getMessage());
-            e.printStackTrace();
+            System.out.println("Error al guardar el log: " + e.getMessage());
         }
     }
 

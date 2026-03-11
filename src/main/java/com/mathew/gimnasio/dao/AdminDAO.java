@@ -33,14 +33,14 @@ public class AdminDAO {
                 if(rs.next()) dash.setTotalEntrenadores(rs.getInt(1));
             }
 
-            // 4. Llenar la Tabla de Accesos al Sistema (Súper segura)
+            // 4. Llenar la Tabla de Accesos al Sistema (Nombres exactos)
             List<AccesoDTO> accesos = new ArrayList<>();
 
-            // Consulta directa y sin riesgos
-            String sqlAccesos = "SELECT u.usuario, u.id_rol, a.fecha_hora, a.ip, a.estado " +
+            // Usamos las columnas exactas de tu tabla: fecha_hora_log, direccion_ip, exitoso
+            String sqlAccesos = "SELECT u.usuario, u.id_rol, a.fecha_hora_log, a.direccion_ip, a.exitoso " +
                     "FROM logs_acceso a " +
                     "INNER JOIN usuarios u ON a.id_usuario = u.id_usuario " +
-                    "ORDER BY a.fecha_hora DESC LIMIT 5";
+                    "ORDER BY a.fecha_hora_log DESC LIMIT 5";
 
             try(PreparedStatement ps = conn.prepareStatement(sqlAccesos);
                 ResultSet rs = ps.executeQuery()) {
@@ -48,13 +48,16 @@ public class AdminDAO {
                     AccesoDTO acc = new AccesoDTO();
                     acc.setUsuario(rs.getString("usuario"));
 
-                    // Deducimos el rol sin arriesgar la consulta SQL
                     int idRol = rs.getInt("id_rol");
                     acc.setRol(idRol == 1 ? "Admin" : "Cliente");
 
-                    acc.setHora(rs.getString("fecha_hora"));
-                    acc.setIp(rs.getString("ip"));
-                    acc.setEstado(rs.getString("estado"));
+                    acc.setHora(rs.getString("fecha_hora_log"));
+                    acc.setIp(rs.getString("direccion_ip"));
+
+                    // Convertir el boolean de tu BD a texto para que se pinte en la web
+                    boolean esExitoso = rs.getBoolean("exitoso");
+                    acc.setEstado(esExitoso ? "Exitoso" : "Fallido");
+
                     accesos.add(acc);
                 }
             } catch (Exception e) {
