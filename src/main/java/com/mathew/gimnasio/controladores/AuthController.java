@@ -275,6 +275,31 @@ public class AuthController {
         String jsonReportes = dao.getReportesJSON();
         return Response.ok(jsonReportes).build();
     }
+    /**
+     * RF09: DESCARGAR REPORTE DE ACCESOS EN CSV
+     */
+    @GET
+    @Path("/admin/reportes/accesos/csv")
+    @Produces("text/csv")
+    public Response descargarAccesosCSV() {
+        String csv = dao.getLogsAccesoCSV();
+        return Response.ok(csv)
+                .header("Content-Disposition", "attachment; filename=\"reporte_auditoria_accesos.csv\"")
+                .build();
+    }
+
+    /**
+     * RF08: DESCARGAR REPORTE DE INGRESOS EN CSV
+     */
+    @GET
+    @Path("/admin/reportes/ingresos/csv")
+    @Produces("text/csv")
+    public Response descargarIngresosCSV() {
+        String csv = dao.getReporteIngresosCSV();
+        return Response.ok(csv)
+                .header("Content-Disposition", "attachment; filename=\"reporte_ingresos_economicos.csv\"")
+                .build();
+    }
 
     /**
      * FORMATEADOR DE ERRORES

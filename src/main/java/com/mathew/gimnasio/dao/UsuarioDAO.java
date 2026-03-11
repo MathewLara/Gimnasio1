@@ -490,6 +490,43 @@ public class UsuarioDAO {
         return json.toString();
     }
 
+    // ==========================================
+    // REQUERIMIENTOS RF08 Y RF09: GENERAR CSV DESDE EL BACKEND
+    // ==========================================
+
+    public String getLogsAccesoCSV() {
+        StringBuilder csv = new StringBuilder();
+        csv.append("ID Registro,Usuario,Rol,Fecha y Hora,Direccion IP,Dispositivo,Estado de Ingreso\n");
+        String sql = "SELECT l.id_log, u.usuario, r.nombre_rol, l.fecha_hora_log, l.direccion_ip, l.tipo_dispositivo, l.exitoso " +
+                "FROM logs_acceso l INNER JOIN usuarios u ON l.id_usuario = u.id_usuario INNER JOIN roles r ON u.id_rol = r.id_rol " +
+                "ORDER BY l.fecha_hora_log DESC";
+        try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                csv.append(rs.getInt("id_log")).append(",")
+                        .append(rs.getString("usuario")).append(",")
+                        .append(rs.getString("nombre_rol")).append(",")
+                        .append(rs.getString("fecha_hora_log")).append(",")
+                        .append(rs.getString("direccion_ip")).append(",")
+                        .append(rs.getString("tipo_dispositivo")).append(",")
+                        .append(rs.getBoolean("exitoso") ? "Exitoso" : "Fallido").append("\n");
+            }
+        } catch (Exception e) { csv.append("Error al generar el reporte de auditoria.\n"); }
+        return csv.toString();
+    }
+
+    public String getReporteIngresosCSV() {
+        StringBuilder csv = new StringBuilder();
+        csv.append("Metodo de Pago,Total Recaudado (USD)\n");
+        String sql = "SELECT metodo_pago, COALESCE(SUM(monto_pagado), 0) as total FROM pagos GROUP BY metodo_pago";
+        try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                String metodo = rs.getString("metodo_pago");
+                csv.append(metodo != null ? metodo : "Otro").append(",").append(rs.getDouble("total")).append("\n");
+            }
+        } catch (Exception e) { csv.append("Error al generar reporte de ingresos.\n"); }
+        return csv.toString();
+    }
+
     // -------------------------------------------------------------------------
     // STUBS
     // -------------------------------------------------------------------------
