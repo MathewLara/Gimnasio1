@@ -79,18 +79,33 @@ public class RecepcionDAO {
             boolean activo = false;
             String nombreUsuario = "";
 
-            // ¡AQUÍ ESTÁ LA SOLUCIÓN! Buscamos ignorando mayúsculas/minúsculas y permitimos email.
+            String paramLimpio = identificador.trim().toLowerCase();
+            int idBuscado = -1;
+
+            // ¡MAGIA!: Si el QR dice "iron_19", extraemos solo el número "19"
+            if (paramLimpio.startsWith("iron_")) {
+                try {
+                    idBuscado = Integer.parseInt(paramLimpio.substring(5));
+                } catch (Exception e) {}
+            } else {
+                // Por si tipean el número directamente (Ej: "19")
+                try {
+                    idBuscado = Integer.parseInt(paramLimpio);
+                } catch (Exception e) {}
+            }
+
+            // Ahora la consulta busca por Usuario, Email o directamente por ID
             String sqlUser = "SELECT u.id_usuario, u.usuario, u.activo " +
                     "FROM usuarios u " +
                     "LEFT JOIN clientes c ON u.id_usuario = c.id_usuario " +
                     "LEFT JOIN entrenadores e ON u.id_usuario = e.id_usuario " +
-                    "WHERE LOWER(u.usuario) = LOWER(?) OR LOWER(c.email) = LOWER(?) OR LOWER(e.email) = LOWER(?)";
+                    "WHERE LOWER(u.usuario) = ? OR LOWER(c.email) = ? OR LOWER(e.email) = ? OR u.id_usuario = ?";
 
             try(PreparedStatement ps = conn.prepareStatement(sqlUser)) {
-                String paramLimpio = identificador.trim().toLowerCase();
                 ps.setString(1, paramLimpio);
                 ps.setString(2, paramLimpio);
                 ps.setString(3, paramLimpio);
+                ps.setInt(4, idBuscado);
 
                 ResultSet rs = ps.executeQuery();
                 if(rs.next()) {
