@@ -13,7 +13,7 @@ public class RecepcionDAO {
 
         try (Connection conn = ConexionDB.getConnection()) {
 
-            // 1. Ingresos en Caja (SOLO DE HOY)
+            // 1. Ingresos en Caja
             double cajaHoy = 0.0;
             String sqlCaja = "SELECT COALESCE(SUM(monto_pagado), 0) FROM pagos WHERE DATE(fecha_pago) = CURRENT_DATE";
             try(PreparedStatement ps = conn.prepareStatement(sqlCaja); ResultSet rs = ps.executeQuery()) {
@@ -21,7 +21,6 @@ public class RecepcionDAO {
             }
 
             // 2. Personas Entrenando (Aforo actual)
-            // USANDO: fecha_hora_ingreso y fecha_hora_salida
             int aforoHoy = 0;
             String sqlAforo = "SELECT COUNT(*) FROM asistencias WHERE DATE(fecha_hora_ingreso) = CURRENT_DATE AND fecha_hora_salida IS NULL";
             try(PreparedStatement ps = conn.prepareStatement(sqlAforo); ResultSet rs = ps.executeQuery()) {
@@ -33,27 +32,31 @@ public class RecepcionDAO {
                     .append("\"aforoHoy\": ").append(aforoHoy)
                     .append("},");
 
-            // 3. Actividad Reciente FÍSICA
+            // 3. Actividad Reciente FÍSICA (SEPARANDO ENTRADAS Y SALIDAS CON UNION)
             json.append("\"actividadReciente\": [");
-            String sqlActividad = "SELECT u.usuario, a.fecha_hora_ingreso, a.fecha_hora_salida " +
-                    "FROM asistencias a " +
-                    "INNER JOIN clientes c ON a.id_cliente = c.id_cliente " +
-                    "INNER JOIN usuarios u ON c.id_usuario = u.id_usuario " +
-                    "WHERE DATE(a.fecha_hora_ingreso) = CURRENT_DATE " +
-                    "ORDER BY COALESCE(a.fecha_hora_salida, a.fecha_hora_ingreso) DESC LIMIT 5";
+            String sqlActividad =
+                    "SELECT u.usuario, a.fecha_hora_ingreso AS hora_movimiento, 'Entrada' AS tipo_movimiento " +
+                            "FROM asistencias a " +
+                            "INNER JOIN clientes c ON a.id_cliente = c.id_cliente " +
+                            "INNER JOIN usuarios u ON c.id_usuario = u.id_usuario " +
+                            "WHERE DATE(a.fecha_hora_ingreso) = CURRENT_DATE " +
+                            "UNION ALL " +
+                            "SELECT u.usuario, a.fecha_hora_salida AS hora_movimiento, 'Salida' AS tipo_movimiento " +
+                            "FROM asistencias a " +
+                            "INNER JOIN clientes c ON a.id_cliente = c.id_cliente " +
+                            "INNER JOIN usuarios u ON c.id_usuario = u.id_usuario " +
+                            "WHERE a.fecha_hora_salida IS NOT NULL AND DATE(a.fecha_hora_salida) = CURRENT_DATE " +
+                            "ORDER BY hora_movimiento DESC LIMIT 5";
 
             try(PreparedStatement ps = conn.prepareStatement(sqlActividad); ResultSet rs = ps.executeQuery()) {
                 boolean first = true;
                 while(rs.next()) {
                     if(!first) json.append(",");
 
-                    String horaIn = rs.getString("fecha_hora_ingreso");
-                    String horaOut = rs.getString("fecha_hora_salida");
+                    String horaMovimiento = rs.getString("hora_movimiento");
+                    String tipoMovimiento = rs.getString("tipo_movimiento");
 
-                    boolean esSalida = (horaOut != null);
-                    String horaMovimiento = esSalida ? horaOut : horaIn;
-
-                    // Extraemos solo la hora (ej. 14:30) del timestamp (ej. 2026-03-11 14:30:00)
+                    // Extraemos solo la hora (ej. 14:30)
                     if(horaMovimiento != null && horaMovimiento.length() >= 16) {
                         horaMovimiento = horaMovimiento.substring(11, 16);
                     }
@@ -61,7 +64,7 @@ public class RecepcionDAO {
                     json.append("{")
                             .append("\"hora\": \"").append(horaMovimiento).append("\",")
                             .append("\"cliente\": \"").append(rs.getString("usuario")).append("\",")
-                            .append("\"tipo\": \"").append(esSalida ? "Salida" : "Entrada").append("\"")
+                            .append("\"tipo\": \"").append(tipoMovimiento).append("\"")
                             .append("}");
                     first = false;
                 }
@@ -123,7 +126,6 @@ public class RecepcionDAO {
             if (idCliente <= 0) return "{\"status\":\"error\", \"mensaje\":\"El usuario existe pero no está registrado como cliente.\"}";
 
             int idAsistencia = -1;
-            // BUSCAMOS ENTRADA SIN SALIDA DE HOY (Usando fecha_hora_ingreso y fecha_hora_salida)
             String sqlCheck = "SELECT id_asistencia FROM asistencias WHERE id_cliente = ? AND DATE(fecha_hora_ingreso) = CURRENT_DATE AND fecha_hora_salida IS NULL";
             try(PreparedStatement ps = conn.prepareStatement(sqlCheck)) {
                 ps.setInt(1, idCliente);
@@ -132,7 +134,7 @@ public class RecepcionDAO {
             }
 
             if (idAsistencia != -1) {
-                // SALIDA (Actualizamos fecha_hora_salida a CURRENT_TIMESTAMP)
+                // SALIDA
                 String sqlOut = "UPDATE asistencias SET fecha_hora_salida = CURRENT_TIMESTAMP WHERE id_asistencia = ?";
                 try(PreparedStatement ps = conn.prepareStatement(sqlOut)) {
                     ps.setInt(1, idAsistencia);
@@ -140,11 +142,14 @@ public class RecepcionDAO {
                 }
                 return "{\"status\":\"ok\", \"tipo\":\"Salida\", \"mensaje\":\"¡Hasta pronto, " + nombreUsuario + "! Salida registrada.\"}";
             } else {
-                // ENTRADA (Insertamos fecha_hora_ingreso como CURRENT_TIMESTAMP y llenamos los datos del QR)
+                // ENTRADA
+                // TRUCO: Le agregamos los milisegundos al código para que PostgreSQL no bloquee por ser duplicado
+                String codigoUnico = identificador.trim() + "_" + System.currentTimeMillis();
+
                 String sqlIn = "INSERT INTO asistencias (id_cliente, fecha_hora_ingreso, dispositivo_qr, codigo_validado) VALUES (?, CURRENT_TIMESTAMP, 'Escáner Recepción', ?)";
                 try(PreparedStatement ps = conn.prepareStatement(sqlIn)) {
                     ps.setInt(1, idCliente);
-                    ps.setString(2, identificador.trim()); // Guardamos qué escaneó exactamente
+                    ps.setString(2, codigoUnico); // Ahora siempre será único
                     ps.executeUpdate();
                 }
                 return "{\"status\":\"ok\", \"tipo\":\"Entrada\", \"mensaje\":\"¡Bienvenido a entrenar, " + nombreUsuario + "! Entrada registrada.\"}";
