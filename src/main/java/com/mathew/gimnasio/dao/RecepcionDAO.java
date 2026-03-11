@@ -166,4 +166,40 @@ public class RecepcionDAO {
             return "{\"status\":\"error\", \"mensaje\":\"Error BD: " + errorMsg + "\"}";
         }
     }
+    // ==========================================
+    // 3. OBTENER DIRECTORIO DE SOCIOS (CON ESTADO EN VIVO)
+    // ==========================================
+    public String obtenerSociosRecepcionJSON() {
+        StringBuilder json = new StringBuilder("[");
+        // Consulta avanzada: Busca a los clientes y cuenta si están adentro del gimnasio HOY
+        String sql = "SELECT u.id_usuario, u.usuario, u.nombre, u.apellido, u.activo, " +
+                "c.email, c.telefono, " +
+                "(SELECT COUNT(*) FROM asistencias a WHERE a.id_cliente = c.id_cliente AND DATE(a.fecha_hora_ingreso) = CURRENT_DATE AND a.fecha_hora_salida IS NULL) as esta_entrenando " +
+                "FROM usuarios u " +
+                "INNER JOIN clientes c ON u.id_usuario = c.id_usuario " +
+                "WHERE u.id_rol = 4 " +
+                "ORDER BY u.id_usuario DESC";
+
+        try (Connection conn = ConexionDB.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            boolean first = true;
+            while (rs.next()) {
+                if (!first) json.append(",");
+                json.append("{")
+                        .append("\"id\":").append(rs.getInt("id_usuario")).append(",")
+                        .append("\"usuario\":\"").append(rs.getString("usuario")).append("\",")
+                        .append("\"nombre\":\"").append(rs.getString("nombre") != null ? rs.getString("nombre") : "").append("\",")
+                        .append("\"apellido\":\"").append(rs.getString("apellido") != null ? rs.getString("apellido") : "").append("\",")
+                        .append("\"activo\":").append(rs.getBoolean("activo")).append(",")
+                        .append("\"email\":\"").append(rs.getString("email") != null ? rs.getString("email") : "").append("\",")
+                        .append("\"telefono\":\"").append(rs.getString("telefono") != null ? rs.getString("telefono") : "").append("\",")
+                        .append("\"esta_entrenando\":").append(rs.getInt("esta_entrenando"))
+                        .append("}");
+                first = false;
+            }
+        } catch (Exception e) { e.printStackTrace(); }
+        json.append("]");
+        return json.toString();
+    }
 }

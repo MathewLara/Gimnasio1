@@ -37,4 +37,14 @@ public class RecepcionController {
         String resultado = dao.procesarAccesoQr(identificador);
         return Response.ok(resultado).build();
     }
+    /**
+     * ENDPOINT PARA OBTENER EL DIRECTORIO DE SOCIOS
+     */
+    @GET
+    @Path("/socios")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response getSociosRecepcion() {
+        String jsonRespuesta = dao.obtenerSociosRecepcionJSON();
+        return Response.ok(jsonRespuesta).build();
+    }
 }
