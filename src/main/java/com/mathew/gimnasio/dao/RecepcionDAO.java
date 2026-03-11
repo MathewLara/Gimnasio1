@@ -13,15 +13,12 @@ public class RecepcionDAO {
 
         try (Connection conn = ConexionDB.getConnection()) {
 
-            // 1. Ingresos en Caja (SOLO DE HOY)
             double cajaHoy = 0.0;
             String sqlCaja = "SELECT COALESCE(SUM(monto_pagado), 0) FROM pagos WHERE DATE(fecha_pago) = CURRENT_DATE";
             try(PreparedStatement ps = conn.prepareStatement(sqlCaja); ResultSet rs = ps.executeQuery()) {
                 if(rs.next()) cajaHoy = rs.getDouble(1);
             }
 
-            // 2. Personas Entrenando (Aforo actual)
-            // CORREGIDO: Tabla 'asistencias' y columna 'fecha'
             int aforoHoy = 0;
             String sqlAforo = "SELECT COUNT(*) FROM asistencias WHERE fecha = CURRENT_DATE AND hora_salida IS NULL";
             try(PreparedStatement ps = conn.prepareStatement(sqlAforo); ResultSet rs = ps.executeQuery()) {
@@ -33,8 +30,6 @@ public class RecepcionDAO {
                     .append("\"aforoHoy\": ").append(aforoHoy)
                     .append("},");
 
-            // 3. Actividad Reciente FÍSICA
-            // CORREGIDO: Tabla 'asistencias' y columna 'fecha'
             json.append("\"actividadReciente\": [");
             String sqlActividad = "SELECT u.usuario, a.hora_entrada, a.hora_salida " +
                     "FROM asistencias a INNER JOIN usuarios u ON a.id_usuario = u.id_usuario " +
@@ -80,14 +75,23 @@ public class RecepcionDAO {
     public String procesarAccesoQr(String identificador) {
         try (Connection conn = ConexionDB.getConnection()) {
 
-            // 1. Buscar al usuario
             int idUsuario = -1;
             boolean activo = false;
             String nombreUsuario = "";
 
-            String sqlUser = "SELECT id_usuario, usuario, activo FROM usuarios WHERE usuario = ?";
+            // ¡AQUÍ ESTÁ LA SOLUCIÓN! Buscamos ignorando mayúsculas/minúsculas y permitimos email.
+            String sqlUser = "SELECT u.id_usuario, u.usuario, u.activo " +
+                    "FROM usuarios u " +
+                    "LEFT JOIN clientes c ON u.id_usuario = c.id_usuario " +
+                    "LEFT JOIN entrenadores e ON u.id_usuario = e.id_usuario " +
+                    "WHERE LOWER(u.usuario) = LOWER(?) OR LOWER(c.email) = LOWER(?) OR LOWER(e.email) = LOWER(?)";
+
             try(PreparedStatement ps = conn.prepareStatement(sqlUser)) {
-                ps.setString(1, identificador.trim());
+                String paramLimpio = identificador.trim().toLowerCase();
+                ps.setString(1, paramLimpio);
+                ps.setString(2, paramLimpio);
+                ps.setString(3, paramLimpio);
+
                 ResultSet rs = ps.executeQuery();
                 if(rs.next()) {
                     idUsuario = rs.getInt("id_usuario");
@@ -99,8 +103,6 @@ public class RecepcionDAO {
             if (idUsuario == -1) return "{\"status\":\"error\", \"mensaje\":\"Usuario no encontrado en la base de datos.\"}";
             if (!activo) return "{\"status\":\"error\", \"mensaje\":\"El usuario está inactivo. Verifique sus pagos.\"}";
 
-            // 2. Ver si la persona ya está adentro del gimnasio
-            // CORREGIDO: Tabla 'asistencias' y columna 'fecha'
             int idAsistencia = -1;
             String sqlCheck = "SELECT id_asistencia FROM asistencias WHERE id_usuario = ? AND fecha = CURRENT_DATE AND hora_salida IS NULL";
             try(PreparedStatement ps = conn.prepareStatement(sqlCheck)) {
@@ -109,10 +111,8 @@ public class RecepcionDAO {
                 if(rs.next()) idAsistencia = rs.getInt("id_asistencia");
             }
 
-            // 3. Tomar la decisión
             if (idAsistencia != -1) {
-                // TIENE ENTRADA ABIERTA -> ¡ESTÁ SALIENDO DEL GIMNASIO!
-                // CORREGIDO: Tabla 'asistencias'
+                // TIENE ENTRADA ABIERTA -> SALIDA
                 String sqlOut = "UPDATE asistencias SET hora_salida = CURRENT_TIME WHERE id_asistencia = ?";
                 try(PreparedStatement ps = conn.prepareStatement(sqlOut)) {
                     ps.setInt(1, idAsistencia);
@@ -120,8 +120,7 @@ public class RecepcionDAO {
                 }
                 return "{\"status\":\"ok\", \"tipo\":\"Salida\", \"mensaje\":\"¡Hasta pronto, " + nombreUsuario + "! Salida registrada.\"}";
             } else {
-                // NO TIENE ENTRADA ABIERTA -> ¡ESTÁ ENTRANDO AL GIMNASIO!
-                // CORREGIDO: Tabla 'asistencias' y columna 'fecha'
+                // NO TIENE ENTRADA ABIERTA -> ENTRADA
                 String sqlIn = "INSERT INTO asistencias (id_usuario, fecha, hora_entrada) VALUES (?, CURRENT_DATE, CURRENT_TIME)";
                 try(PreparedStatement ps = conn.prepareStatement(sqlIn)) {
                     ps.setInt(1, idUsuario);
