@@ -27,13 +27,11 @@ public class UsuarioDAO {
         PreparedStatement psCodigo = null;
         ResultSet rs = null;
 
-        System.out.println(">>> DAO: Iniciando Transacción de Registro Completo <<<");
-
         try {
             conn = ConexionDB.getConnection();
-            conn.setAutoCommit(false); // ¡IMPORTANTE! Apagamos el guardado automático para iniciar la transacción
+            conn.setAutoCommit(false);
 
-            // --- A. INSERTAR USUARIO (Tabla de credenciales) ---
+            // --- A. INSERTAR USUARIO ---
             String sqlUsuario = "INSERT INTO usuarios (id_rol, usuario, contrasena, activo) VALUES (?, ?, ?, ?)";
             psUsuario = conn.prepareStatement(sqlUsuario, Statement.RETURN_GENERATED_KEYS);
 
@@ -51,7 +49,7 @@ public class UsuarioDAO {
                 u.setIdUsuario(idGenerado);
             }
 
-            // --- B. INSERTAR CLIENTE (Tabla de datos personales) ---
+            // --- B. INSERTAR CLIENTE ---
             String nombre = (u.getNombre() != null) ? u.getNombre() : "N/A";
             String apellido = (u.getApellido() != null) ? u.getApellido() : "N/A";
             String emailLimpio = u.getEmail().trim().toLowerCase();
@@ -72,8 +70,7 @@ public class UsuarioDAO {
 
             psCliente.executeUpdate();
 
-            // --- C. INSERTAR CÓDIGO (Para verificación de correo) ---
-            System.out.println(">>> DAO: Guardando código " + codigoGenerado + " para ID " + idGenerado);
+            // --- C. INSERTAR CÓDIGO ---
             String sqlCodigo = "INSERT INTO codigos_verificacion (id_usuario, codigo, fecha_expiracion) VALUES (?, ?, CURRENT_TIMESTAMP + INTERVAL '15 minutes')";
             psCodigo = conn.prepareStatement(sqlCodigo);
             psCodigo.setInt(1, idGenerado);
@@ -82,7 +79,6 @@ public class UsuarioDAO {
 
             // --- CONFIRMAR TODO ---
             conn.commit();
-            System.out.println(">>> DAO: ¡Registro Completado Exitosamente! <<<");
             return true;
 
         } catch (SQLException e) {
@@ -107,10 +103,6 @@ public class UsuarioDAO {
         PreparedStatement ps = null;
         ResultSet rs = null;
 
-        System.out.println("--- DAO: Validando Código ---");
-        System.out.println("Email buscado: " + email);
-        System.out.println("Código ingresado: " + codigoIngresado);
-
         try {
             conn = ConexionDB.getConnection();
             String emailLimpio = email.trim().toLowerCase();
@@ -125,11 +117,7 @@ public class UsuarioDAO {
             if (rs.next()) idEncontrado = rs.getInt("id_usuario");
             rs.close(); ps.close();
 
-            if (idEncontrado == -1) {
-                System.out.println("ERROR: Email no registrado.");
-                return false;
-            }
-            System.out.println("INFO: ID encontrado: " + idEncontrado);
+            if (idEncontrado == -1) return false;
 
             String sqlValidar = "SELECT id_codigo, codigo FROM codigos_verificacion WHERE id_usuario = ? AND codigo = ? AND usado = FALSE";
             ps = conn.prepareStatement(sqlValidar);
@@ -138,9 +126,7 @@ public class UsuarioDAO {
             rs = ps.executeQuery();
 
             if (rs.next()) {
-                System.out.println("¡ÉXITO! Código coincide.");
                 int idCodigo = rs.getInt("id_codigo");
-
                 ps.close();
                 ps = conn.prepareStatement("UPDATE codigos_verificacion SET usado = TRUE WHERE id_codigo = ?");
                 ps.setInt(1, idCodigo);
@@ -148,9 +134,6 @@ public class UsuarioDAO {
 
                 activarUsuario(idEncontrado);
                 return true;
-            } else {
-                System.out.println("ERROR: Código incorrecto en BDD.");
-                verCodigosDeUsuario(idEncontrado);
             }
 
         } catch (Exception e) { e.printStackTrace(); }
@@ -239,13 +222,13 @@ public class UsuarioDAO {
     // GESTIÓN DE USUARIOS (PANEL ADMIN)
     // ==========================================
 
-    // 1. Listar todos los usuarios con sus roles (AHORA EXTRAE CORREO Y TELÉFONO)
+    // 1. LISTAR USUARIOS (CORREGIDO PARA NO PEDIR TELÉFONO A ENTRENADORES)
     public String obtenerUsuariosParaAdminJSON() {
         StringBuilder json = new StringBuilder("[");
-        // Hacemos un JOIN para traer el email y teléfono de clientes o entrenadores
+        // ATENCIÓN: Solo extraemos c.telefono de los clientes, porque entrenadores no tiene esa columna.
         String sql = "SELECT u.id_usuario, u.usuario, u.nombre, u.apellido, u.activo, r.nombre_rol, " +
                 "COALESCE(c.email, e.email) as email, " +
-                "COALESCE(c.telefono, e.telefono) as telefono " +
+                "c.telefono as telefono " +
                 "FROM usuarios u " +
                 "INNER JOIN roles r ON u.id_rol = r.id_rol " +
                 "LEFT JOIN clientes c ON u.id_usuario = c.id_usuario " +
@@ -275,7 +258,7 @@ public class UsuarioDAO {
         return json.toString();
     }
 
-    // 2. Eliminado Lógico (Cambiar estado activo/inactivo)
+    // 2. Eliminado Lógico
     public boolean cambiarEstadoUsuario(int idUsuario, boolean nuevoEstado) {
         String sql = "UPDATE usuarios SET activo = ? WHERE id_usuario = ?";
         try (Connection conn = ConexionDB.getConnection();
@@ -286,14 +269,13 @@ public class UsuarioDAO {
         } catch (Exception e) { return false; }
     }
 
-    // 3. AGREGAR NUEVO PERSONAL / USUARIO (CON CORREO Y TELÉFONO)
+    // 3. AGREGAR NUEVO USUARIO (CORREGIDO PARA ENTRENADORES)
     public boolean agregarPersonalAdmin(Usuario u) {
         Connection conn = null;
         try {
             conn = ConexionDB.getConnection();
             conn.setAutoCommit(false);
 
-            // A. Insertar en tabla principal 'usuarios'
             String sqlUser = "INSERT INTO usuarios (id_rol, usuario, contrasena, activo, nombre, apellido) VALUES (?, ?, ?, true, ?, ?)";
             int nuevoIdUsuario = -1;
 
@@ -316,8 +298,7 @@ public class UsuarioDAO {
                 return false;
             }
 
-            // B. Insertar en la tabla hija correspondiente con Email y Teléfono
-            if (u.getIdRol() == 4) { // Cliente
+            if (u.getIdRol() == 4) { // Cliente (Con Email y Teléfono)
                 String sqlCli = "INSERT INTO clientes (id_usuario, nombre, apellido, email, telefono) VALUES (?, ?, ?, ?, ?)";
                 try (PreparedStatement psCli = conn.prepareStatement(sqlCli)) {
                     psCli.setInt(1, nuevoIdUsuario);
@@ -327,14 +308,13 @@ public class UsuarioDAO {
                     psCli.setString(5, u.getTelefono());
                     psCli.executeUpdate();
                 }
-            } else if (u.getIdRol() == 3) { // Entrenador
-                String sqlEnt = "INSERT INTO entrenadores (id_usuario, nombre, apellido, email, telefono) VALUES (?, ?, ?, ?, ?)";
+            } else if (u.getIdRol() == 3) { // Entrenador (Solo con Email, SIN Teléfono)
+                String sqlEnt = "INSERT INTO entrenadores (id_usuario, nombre, apellido, email) VALUES (?, ?, ?, ?)";
                 try (PreparedStatement psEnt = conn.prepareStatement(sqlEnt)) {
                     psEnt.setInt(1, nuevoIdUsuario);
                     psEnt.setString(2, u.getNombre());
                     psEnt.setString(3, u.getApellido());
                     psEnt.setString(4, u.getEmail());
-                    psEnt.setString(5, u.getTelefono());
                     psEnt.executeUpdate();
                 }
             }
@@ -351,14 +331,13 @@ public class UsuarioDAO {
         }
     }
 
-    // 4. EDITAR USUARIO (CON CORREO Y TELÉFONO)
+    // 4. EDITAR USUARIO (CORREGIDO PARA ENTRENADORES)
     public boolean editarPersonalAdmin(Usuario u) {
         Connection conn = null;
         try {
             conn = ConexionDB.getConnection();
             conn.setAutoCommit(false);
 
-            // A. Actualizar en la tabla principal
             boolean cambiaPass = (u.getContrasena() != null && !u.getContrasena().trim().isEmpty());
             String sqlUser = cambiaPass
                     ? "UPDATE usuarios SET id_rol=?, usuario=?, contrasena=?, nombre=?, apellido=? WHERE id_usuario=?"
@@ -380,8 +359,7 @@ public class UsuarioDAO {
                 ps.executeUpdate();
             }
 
-            // B. Actualizar también en la tabla hija
-            if (u.getIdRol() == 4) {
+            if (u.getIdRol() == 4) { // Cliente (Actualiza Teléfono)
                 String sqlCli = "UPDATE clientes SET nombre=?, apellido=?, email=?, telefono=? WHERE id_usuario=?";
                 try (PreparedStatement psCli = conn.prepareStatement(sqlCli)) {
                     psCli.setString(1, u.getNombre());
@@ -391,14 +369,13 @@ public class UsuarioDAO {
                     psCli.setInt(5, u.getIdUsuario());
                     psCli.executeUpdate();
                 }
-            } else if (u.getIdRol() == 3) {
-                String sqlEnt = "UPDATE entrenadores SET nombre=?, apellido=?, email=?, telefono=? WHERE id_usuario=?";
+            } else if (u.getIdRol() == 3) { // Entrenador (No actualiza Teléfono)
+                String sqlEnt = "UPDATE entrenadores SET nombre=?, apellido=?, email=? WHERE id_usuario=?";
                 try (PreparedStatement psEnt = conn.prepareStatement(sqlEnt)) {
                     psEnt.setString(1, u.getNombre());
                     psEnt.setString(2, u.getApellido());
                     psEnt.setString(3, u.getEmail());
-                    psEnt.setString(4, u.getTelefono());
-                    psEnt.setInt(5, u.getIdUsuario());
+                    psEnt.setInt(4, u.getIdUsuario());
                     psEnt.executeUpdate();
                 }
             }
@@ -413,33 +390,6 @@ public class UsuarioDAO {
         } finally {
             try { if (conn != null) { conn.setAutoCommit(true); conn.close(); } } catch (Exception e) {}
         }
-    }
-
-    // ==========================================
-    // 5. MÉTODOS AUXILIARES Y STUBS
-    // ==========================================
-
-    public boolean guardarCodigo2FA(int idUsuario, String codigo) {
-        String sql = "INSERT INTO codigos_verificacion (id_usuario, codigo, fecha_expiracion) VALUES (?, ?, CURRENT_TIMESTAMP + INTERVAL '15 minutes')";
-        try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, idUsuario);
-            ps.setString(2, codigo);
-            ps.executeUpdate();
-            return true;
-        } catch (Exception e) { return false; }
-    }
-
-    private void verCodigosDeUsuario(int idUsuario) {
-        try (Connection conn = ConexionDB.getConnection();
-             PreparedStatement ps = conn.prepareStatement("SELECT * FROM codigos_verificacion WHERE id_usuario = ?")) {
-            ps.setInt(1, idUsuario);
-            ResultSet rs = ps.executeQuery();
-            System.out.println("--- DEBUG CÓDIGOS ACTUALES EN BD (ID " + idUsuario + ") ---");
-            while(rs.next()) {
-                System.out.println(" -> " + rs.getString("codigo") + " (Usado: " + rs.getBoolean("usado") + ")");
-            }
-            System.out.println("------------------------------------------------");
-        } catch(Exception e) {}
     }
 
     // ==========================================
