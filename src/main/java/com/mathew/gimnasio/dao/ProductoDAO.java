@@ -23,7 +23,7 @@ public class ProductoDAO {
     public List<Producto> listarProductos() {
         List<Producto> lista = new ArrayList<>();
         // Seleccionamos solo las columnas de texto y números
-        String sql = "SELECT id_producto, nombre, descripcion, precio, tipo FROM productos ORDER BY id_producto ASC";
+        String sql = "SELECT id_producto, nombre, descripcion, precio, tipo, imagen_url FROM productos ORDER BY id_producto ASC";
 
         try (Connection conn = ConexionDB.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql);
@@ -36,6 +36,7 @@ public class ProductoDAO {
                 p.setDescripcion(rs.getString("descripcion"));
                 p.setPrecio(rs.getDouble("precio"));
                 p.setTipo(rs.getString("tipo"));
+                p.setImagenUrl(rs.getString("imagen_url"));
                 lista.add(p);
             }
         } catch (Exception e)
@@ -66,5 +67,67 @@ public class ProductoDAO {
             }
         } catch (Exception e) { e.printStackTrace(); }
         return null; // Si algo falla o no hay imagen, devolvemos vacío
+    }
+
+    /**
+     * CREAR PRODUCTO
+     * Inserta un nuevo producto en la base de datos de la tienda.
+     */
+    public boolean crearProducto(Producto p) {
+        String sql = "INSERT INTO productos (nombre, descripcion, precio, tipo, imagen_url) VALUES (?, ?, ?, ?, ?)";
+        try (Connection conn = ConexionDB.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            
+            ps.setString(1, p.getNombre());
+            ps.setString(2, p.getDescripcion());
+            ps.setDouble(3, p.getPrecio());
+            ps.setString(4, p.getTipo());
+            ps.setString(5, p.getImagenUrl());
+            
+            return ps.executeUpdate() > 0;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    /**
+     * ACTUALIZAR PRODUCTO
+     * Modifica los datos de un producto existente.
+     */
+    public boolean actualizarProducto(Producto p) {
+        String sql = "UPDATE productos SET nombre = ?, descripcion = ?, precio = ?, tipo = ?, imagen_url = ? WHERE id_producto = ?";
+        try (Connection conn = ConexionDB.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            
+            ps.setString(1, p.getNombre());
+            ps.setString(2, p.getDescripcion());
+            ps.setDouble(3, p.getPrecio());
+            ps.setString(4, p.getTipo());
+            ps.setString(5, p.getImagenUrl());
+            ps.setInt(6, p.getIdProducto());
+            
+            return ps.executeUpdate() > 0;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    /**
+     * ELIMINAR PRODUCTO
+     * Borra un producto del catálogo definitivamente.
+     */
+    public boolean eliminarProducto(int idProducto) {
+        String sql = "DELETE FROM productos WHERE id_producto = ?";
+        try (Connection conn = ConexionDB.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            
+            ps.setInt(1, idProducto);
+            return ps.executeUpdate() > 0;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 }

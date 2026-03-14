@@ -8,6 +8,7 @@ public class Producto implements Serializable {
     private String descripcion;
     private double precio;
     private String tipo;
+    private String imagenUrl;
     // No ponemos la imagen aquí para que la lista cargue rápido
 
     public Producto() {}
@@ -26,4 +27,7 @@ public class Producto implements Serializable {
 
     public String getTipo() { return tipo; }
     public void setTipo(String tipo) { this.tipo = tipo; }
+
+    public String getImagenUrl() { return imagenUrl; }
+    public void setImagenUrl(String imagenUrl) { this.imagenUrl = imagenUrl; }
 }

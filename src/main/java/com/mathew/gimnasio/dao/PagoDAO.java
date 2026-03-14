@@ -20,18 +20,20 @@ public class PagoDAO {
             PreparedStatement ps;
             if (idCliente != null && idCliente > 0) {
                 sql = "SELECT p.id_pago, p.fecha_pago, p.monto_pagado, p.metodo_pago, p.referencia_comprobante, " +
-                        "m.nombre as membresia, c.nombre||' '||c.apellido as cliente " +
+                        "m.nombre as membresia, c.nombre||' '||c.apellido as cliente, f.id_factura " +
                         "FROM pagos p LEFT JOIN membresias m ON p.id_membresia = m.id_membresia " +
                         "LEFT JOIN clientes c ON p.id_cliente = c.id_cliente " +
+                        "LEFT JOIN factura_encabezados f ON f.id_pago = p.id_pago " +
                         "WHERE p.id_cliente = ? ORDER BY p.fecha_pago DESC LIMIT ?";
                 ps = conn.prepareStatement(sql);
                 ps.setInt(1, idCliente);
                 ps.setInt(2, limite);
             } else {
                 sql = "SELECT p.id_pago, p.fecha_pago, p.monto_pagado, p.metodo_pago, p.referencia_comprobante, " +
-                        "m.nombre as membresia, c.nombre||' '||c.apellido as cliente " +
+                        "m.nombre as membresia, c.nombre||' '||c.apellido as cliente, f.id_factura " +
                         "FROM pagos p LEFT JOIN membresias m ON p.id_membresia = m.id_membresia " +
                         "LEFT JOIN clientes c ON p.id_cliente = c.id_cliente " +
+                        "LEFT JOIN factura_encabezados f ON f.id_pago = p.id_pago " +
                         "ORDER BY p.fecha_pago DESC LIMIT ?";
                 ps = conn.prepareStatement(sql);
                 ps.setInt(1, limite);
@@ -40,6 +42,9 @@ public class PagoDAO {
             boolean first = true;
             while (rs.next()) {
                 if (!first) json.append(",");
+                
+                Integer idFactura = rs.getObject("id_factura") != null ? rs.getInt("id_factura") : null;
+                
                 json.append("{")
                         .append("\"idPago\":").append(rs.getInt("id_pago")).append(",")
                         .append("\"fecha\":\"").append(rs.getTimestamp("fecha_pago")).append("\",")
@@ -47,7 +52,8 @@ public class PagoDAO {
                         .append("\"metodo\":\"").append(JsonUtil.escape(rs.getString("metodo_pago"))).append("\",")
                         .append("\"referencia\":\"").append(JsonUtil.escape(rs.getString("referencia_comprobante"))).append("\",")
                         .append("\"membresia\":\"").append(JsonUtil.escape(rs.getString("membresia"))).append("\",")
-                        .append("\"cliente\":\"").append(JsonUtil.escape(rs.getString("cliente"))).append("\"")
+                        .append("\"cliente\":\"").append(JsonUtil.escape(rs.getString("cliente"))).append("\",")
+                        .append("\"idFactura\":").append(idFactura)
                         .append("}");
                 first = false;
             }
@@ -64,8 +70,9 @@ public class PagoDAO {
     private String obtenerPagosSinCliente(int limite) {
         StringBuilder json = new StringBuilder("[");
         try (Connection conn = ConexionDB.getConnection()) {
-            String sql = "SELECT p.id_pago, p.fecha_pago, p.monto_pagado, p.metodo_pago, m.nombre as membresia " +
+            String sql = "SELECT p.id_pago, p.fecha_pago, p.monto_pagado, p.metodo_pago, m.nombre as membresia, f.id_factura " +
                     "FROM pagos p LEFT JOIN membresias m ON p.id_membresia = m.id_membresia " +
+                    "LEFT JOIN factura_encabezados f ON f.id_pago = p.id_pago " +
                     "ORDER BY p.fecha_pago DESC LIMIT ?";
             PreparedStatement ps = conn.prepareStatement(sql);
             ps.setInt(1, limite);
@@ -73,12 +80,16 @@ public class PagoDAO {
             boolean first = true;
             while (rs.next()) {
                 if (!first) json.append(",");
+                
+                Integer idFactura = rs.getObject("id_factura") != null ? rs.getInt("id_factura") : null;
+                
                 json.append("{")
                         .append("\"idPago\":").append(rs.getInt("id_pago")).append(",")
                         .append("\"fecha\":\"").append(rs.getTimestamp("fecha_pago")).append("\",")
                         .append("\"monto\":").append(rs.getDouble("monto_pagado")).append(",")
                         .append("\"metodo\":\"").append(JsonUtil.escape(rs.getString("metodo_pago"))).append("\",")
-                        .append("\"membresia\":\"").append(JsonUtil.escape(rs.getString("membresia"))).append("\"")
+                        .append("\"membresia\":\"").append(JsonUtil.escape(rs.getString("membresia"))).append("\",")
+                        .append("\"idFactura\":").append(idFactura)
                         .append("}");
                 first = false;
             }

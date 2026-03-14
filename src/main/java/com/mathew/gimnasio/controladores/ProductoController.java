@@ -57,4 +57,54 @@ public class ProductoController {
             return Response.status(Response.Status.NOT_FOUND).build();
         }
     }
+
+    /**
+     * CREAR PRODUCTO
+     * URL: POST /api/productos
+     */
+    @POST
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response crear(Producto p) {
+        if (dao.crearProducto(p)) {
+            return Response.ok("{\"mensaje\":\"Producto creado correctamente\"}").build();
+        } else {
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                           .entity("{\"mensaje\":\"Error al crear producto\"}").build();
+        }
+    }
+
+    /**
+     * ACTUALIZAR PRODUCTO
+     * URL: PUT /api/productos/{id}
+     */
+    @PUT
+    @Path("/{id}")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response actualizar(@PathParam("id") int id, Producto p) {
+        p.setIdProducto(id);
+        if (dao.actualizarProducto(p)) {
+            return Response.ok("{\"mensaje\":\"Producto actualizado\"}").build();
+        } else {
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                           .entity("{\"mensaje\":\"Error al actualizar producto\"}").build();
+        }
+    }
+
+    /**
+     * ELIMINAR PRODUCTO
+     * URL: DELETE /api/productos/{id}
+     */
+    @DELETE
+    @Path("/{id}")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response eliminar(@PathParam("id") int id) {
+        if (dao.eliminarProducto(id)) {
+            return Response.ok("{\"mensaje\":\"Producto eliminado\"}").build();
+        } else {
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                           .entity("{\"mensaje\":\"Error al eliminar producto\"}").build();
+        }
+    }
 }
