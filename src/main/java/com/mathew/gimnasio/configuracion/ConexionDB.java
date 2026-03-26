@@ -14,7 +14,7 @@ public class ConexionDB {
 
     // Credenciales y ruta de nuestra base de datos PostgreSQL
     // Credenciales y ruta de nuestra base de datos PostgreSQL
-    private static final String URL = "jdbc:postgresql://dpg-d72ap5m3jp1c73ebck50-a.ohio-postgres.render.com:5432/gimnasio_db_m3ac?sslmode=require";
+    private static final String URL = "jdbc:postgresql://dpg-d72ap5m3jp1c73ebck50-a.ohio-postgres.render.com:5432/gimnasio_db_v2?sslmode=require";
     private static final String USER = "gimnasio_db_v2_user";
     private static final String PASS = "dg6hzVTRH7VGz84hRAjIFzrxtmSVs06Q";
 
