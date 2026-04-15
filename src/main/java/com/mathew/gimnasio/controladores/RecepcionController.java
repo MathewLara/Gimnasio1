@@ -2,11 +2,7 @@ package com.mathew.gimnasio.controladores;
 
 import com.mathew.gimnasio.dao.RecepcionDAO;
 
-import jakarta.ws.rs.GET;
-import jakarta.ws.rs.POST;
-import jakarta.ws.rs.Path;
-import jakarta.ws.rs.Produces;
-import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
@@ -46,5 +42,42 @@ public class RecepcionController {
     public Response getSociosRecepcion() {
         String jsonRespuesta = dao.obtenerSociosRecepcionJSON();
         return Response.ok(jsonRespuesta).build();
+    }
+    /**
+     * ENDPOINT: Obtener historial de pagos
+     */
+    @GET
+    @Path("/pagos")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response getHistorialPagos() {
+        String jsonRespuesta = dao.obtenerHistorialPagosJSON();
+        return Response.ok(jsonRespuesta).build();
+    }
+
+    /**
+     * ENDPOINT: Registrar nuevo pago desde el modal
+     */
+    @POST
+    @Path("/pagos")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response registrarNuevoPago(java.util.Map<String, Object> payload) {
+        try {
+            // Extraemos los datos enviados desde JavaScript
+            int idCliente = Integer.parseInt(payload.get("idCliente").toString());
+            int idPlan = Integer.parseInt(payload.get("idPlan").toString());
+            double monto = Double.parseDouble(payload.get("monto").toString());
+            String metodo = payload.get("metodo").toString();
+
+            boolean exito = dao.registrarPago(idCliente, idPlan, monto, metodo);
+
+            if(exito) {
+                return Response.ok("{\"status\":\"ok\", \"mensaje\":\"Pago registrado exitosamente.\"}").build();
+            } else {
+                return Response.status(400).entity("{\"status\":\"error\", \"mensaje\":\"No se pudo registrar el pago en la base de datos.\"}").build();
+            }
+        } catch(Exception e) {
+            return Response.status(500).entity("{\"status\":\"error\", \"mensaje\":\"Error interno: " + e.getMessage() + "\"}").build();
+        }
     }
 }

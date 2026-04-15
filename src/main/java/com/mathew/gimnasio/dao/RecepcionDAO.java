@@ -202,4 +202,67 @@ public class RecepcionDAO {
         json.append("]");
         return json.toString();
     }
+    // ==========================================
+    // 4. OBTENER HISTORIAL DE CAJA (PAGOS)
+    // ==========================================
+    public String obtenerHistorialPagosJSON() {
+        StringBuilder json = new StringBuilder("[");
+
+        // Buscamos los pagos y cruzamos con clientes/usuarios para tener el nombre
+        String sql = "SELECT p.id_pago, u.usuario, p.monto_pagado, p.fecha_pago, p.metodo_pago, p.id_plan " +
+                "FROM pagos p " +
+                "INNER JOIN clientes c ON p.id_cliente = c.id_cliente " +
+                "INNER JOIN usuarios u ON c.id_usuario = u.id_usuario " +
+                "ORDER BY p.fecha_pago DESC LIMIT 50";
+
+        try (Connection conn = ConexionDB.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            boolean first = true;
+            while(rs.next()) {
+                if(!first) json.append(",");
+
+                // Extraemos solo la fecha y hora sin los milisegundos
+                String fechaLimpia = rs.getString("fecha_pago");
+                if(fechaLimpia != null && fechaLimpia.length() > 19) {
+                    fechaLimpia = fechaLimpia.substring(0, 19);
+                }
+
+                json.append("{")
+                        .append("\"id_pago\":").append(rs.getInt("id_pago")).append(",")
+                        .append("\"socio\":\"").append(rs.getString("usuario")).append("\",")
+                        .append("\"monto\":").append(rs.getDouble("monto_pagado")).append(",")
+                        .append("\"fecha\":\"").append(fechaLimpia).append("\",")
+                        .append("\"metodo\":\"").append(rs.getString("metodo_pago")).append("\",")
+                        .append("\"id_plan\":").append(rs.getInt("id_plan"))
+                        .append("}");
+                first = false;
+            }
+        } catch (Exception e) {
+            System.out.println("Error Historial Pagos: " + e.getMessage());
+        }
+        json.append("]");
+        return json.toString();
+    }
+
+    // ==========================================
+    // 5. REGISTRAR UN NUEVO PAGO
+    // ==========================================
+    public boolean registrarPago(int idCliente, int idPlan, double monto, String metodo) {
+        String sql = "INSERT INTO pagos (id_cliente, id_plan, monto_pagado, metodo_pago, fecha_pago) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)";
+        try (Connection conn = ConexionDB.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, idCliente);
+            ps.setInt(2, idPlan);
+            ps.setDouble(3, monto);
+            ps.setString(4, metodo);
+
+            return ps.executeUpdate() > 0;
+
+        } catch (Exception e) {
+            System.out.println("Error Registrando Pago: " + e.getMessage());
+            return false;
+        }
+    }
 }
