@@ -72,4 +72,57 @@ public class AdminDAO {
         }
         return dash;
     }
+    // ==========================================
+    // OBTENER TODO EL HISTORIAL DE PAGOS (ADMIN)
+    // ==========================================
+    public String obtenerHistorialPagosJSON() {
+        StringBuilder json = new StringBuilder("[");
+        String sql = "SELECT p.id_pago, u.usuario, p.monto_pagado, p.fecha_pago, p.metodo_pago, p.id_membresia " +
+                "FROM pagos p " +
+                "INNER JOIN clientes c ON p.id_cliente = c.id_cliente " +
+                "INNER JOIN usuarios u ON c.id_usuario = u.id_usuario " +
+                "ORDER BY p.fecha_pago DESC";
+
+        try (Connection conn = ConexionDB.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            boolean first = true;
+            while(rs.next()) {
+                if(!first) json.append(",");
+                json.append("{")
+                        .append("\"id_pago\":").append(rs.getInt("id_pago")).append(",")
+                        .append("\"socio\":\"").append(rs.getString("usuario")).append("\",")
+                        .append("\"monto\":").append(rs.getDouble("monto_pagado")).append(",")
+                        .append("\"fecha\":\"").append(rs.getString("fecha_pago")).append("\",")
+                        .append("\"metodo\":\"").append(rs.getString("metodo_pago")).append("\",")
+                        .append("\"id_plan\":").append(rs.getInt("id_membresia"))
+                        .append("}");
+                first = false;
+            }
+        } catch (Exception e) {
+            System.out.println("Error Historial Pagos Admin: " + e.getMessage());
+        }
+        json.append("]");
+        return json.toString();
+    }
+
+    // ==========================================
+    // REGISTRAR PAGO (DESDE EL ADMIN)
+    // ==========================================
+    public boolean registrarPago(int idUsuario, int idPlan, double monto, String metodo) {
+        String sql = "INSERT INTO pagos (id_cliente, id_membresia, monto_pagado, metodo_pago, fecha_pago) " +
+                "SELECT id_cliente, ?, ?, ?, CURRENT_TIMESTAMP " +
+                "FROM clientes WHERE id_usuario = ?";
+        try (Connection conn = ConexionDB.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, idPlan);
+            ps.setDouble(2, monto);
+            ps.setString(3, metodo);
+            ps.setInt(4, idUsuario);
+            return ps.executeUpdate() > 0;
+        } catch (Exception e) {
+            System.out.println("Error Pago Admin: " + e.getMessage());
+            return false;
+        }
+    }
 }
