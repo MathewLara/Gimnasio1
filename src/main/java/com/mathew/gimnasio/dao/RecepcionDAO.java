@@ -248,20 +248,26 @@ public class RecepcionDAO {
     // ==========================================
     // 5. REGISTRAR UN NUEVO PAGO
     // ==========================================
-    public boolean registrarPago(int idCliente, int idPlan, double monto, String metodo) {
-        String sql = "INSERT INTO pagos (id_cliente, id_plan, monto_pagado, metodo_pago, fecha_pago) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)";
+    public boolean registrarPago(int idUsuarioEnviado, int idPlan, double monto, String metodo) {
+        // TRUCO: Como el JS nos manda el id_usuario, usamos un SELECT para
+        // encontrar automáticamente el id_cliente correcto e insertarlo en pagos.
+        String sql = "INSERT INTO pagos (id_cliente, id_plan, monto_pagado, metodo_pago, fecha_pago) " +
+                "SELECT id_cliente, ?, ?, ?, CURRENT_TIMESTAMP " +
+                "FROM clientes WHERE id_usuario = ?";
+
         try (Connection conn = ConexionDB.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
-            ps.setInt(1, idCliente);
-            ps.setInt(2, idPlan);
-            ps.setDouble(3, monto);
-            ps.setString(4, metodo);
+            ps.setInt(1, idPlan);
+            ps.setDouble(2, monto);
+            ps.setString(3, metodo);
+            ps.setInt(4, idUsuarioEnviado); // El ID que manda el front es el id_usuario
 
-            return ps.executeUpdate() > 0;
+            return ps.executeUpdate() > 0; // Si devuelve > 0, se insertó correctamente
 
         } catch (Exception e) {
-            System.out.println("Error Registrando Pago: " + e.getMessage());
+            // Si algo falla, el error exacto se imprimirá en los Logs de Render
+            System.out.println("Error Registrando Pago en BD: " + e.getMessage());
             return false;
         }
     }
