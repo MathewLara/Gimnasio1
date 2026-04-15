@@ -32,7 +32,12 @@ public class AdminDAO {
                 ResultSet rs = ps.executeQuery()) {
                 if(rs.next()) dash.setTotalEntrenadores(rs.getInt(1));
             }
-
+            // 4. NUEVO: Contar Membresías Vencidas
+            String sqlVencidas = "SELECT COUNT(*) FROM clientes WHERE fecha_vencimiento < CURRENT_DATE";
+            try(PreparedStatement ps = conn.prepareStatement(sqlVencidas);
+                ResultSet rs = ps.executeQuery()) {
+                if(rs.next()) dash.setMembresiasVencidas(rs.getInt(1));
+            }
             // 4. Llenar la Tabla de Accesos al Sistema (Nombres exactos)
             List<AccesoDTO> accesos = new ArrayList<>();
 
