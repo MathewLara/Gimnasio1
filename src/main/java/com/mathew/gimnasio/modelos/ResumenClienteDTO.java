@@ -16,11 +16,23 @@ public class ResumenClienteDTO implements Serializable {
     public String fechaVencimiento;
     public String estadoMembresia;
 
+    // CAMPOS PARA LAS TARJETAS SUPERIORES
+    public String ultimoIngreso;
+    public String ultimaSalida;
+
     public static class AsistenciaSimple implements Serializable {
         public String fecha;
         public String hora;
-        public AsistenciaSimple(String f, String h) { this.fecha = f; this.hora = h; }
+        public String hora_salida; // NUEVO CAMPO
+
+        // Constructor actualizado para recibir la salida
+        public AsistenciaSimple(String f, String h, String hs) {
+            this.fecha = f;
+            this.hora = h;
+            this.hora_salida = hs;
+        }
     }
+
     public static class EjercicioSimple implements Serializable {
         public String nombre;
         public String seriesReps;
