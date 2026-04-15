@@ -140,7 +140,12 @@ public class RecepcionDAO {
                     ps.setInt(1, idAsistencia);
                     ps.executeUpdate();
                 }
-                return "{\"status\":\"ok\", \"tipo\":\"Salida\", \"mensaje\":\"¡Hasta pronto, " + nombreUsuario + "! Salida registrada.\"}";
+
+                // OBTENEMOS LA HORA EXACTA DE ECUADOR PARA EL MENSAJE
+                java.time.ZonedDateTime ahoraEcuador = java.time.ZonedDateTime.now(java.time.ZoneId.of("America/Guayaquil"));
+                String horaFmt = ahoraEcuador.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
+
+                return "{\"status\":\"ok\", \"tipo\":\"Salida\", \"mensaje\":\"¡Hasta pronto, " + nombreUsuario + "! Salida a las " + horaFmt + "\"}";
             } else {
                 // ENTRADA
                 // TRUCO: Le agregamos los milisegundos al código para que PostgreSQL no bloquee por ser duplicado
@@ -152,7 +157,12 @@ public class RecepcionDAO {
                     ps.setString(2, codigoUnico); // Ahora siempre será único
                     ps.executeUpdate();
                 }
-                return "{\"status\":\"ok\", \"tipo\":\"Entrada\", \"mensaje\":\"¡Bienvenido a entrenar, " + nombreUsuario + "! Entrada registrada.\"}";
+
+                // OBTENEMOS LA HORA EXACTA DE ECUADOR PARA EL MENSAJE
+                java.time.ZonedDateTime ahoraEcuador = java.time.ZonedDateTime.now(java.time.ZoneId.of("America/Guayaquil"));
+                String horaFmt = ahoraEcuador.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
+
+                return "{\"status\":\"ok\", \"tipo\":\"Entrada\", \"mensaje\":\"¡Bienvenido a entrenar, " + nombreUsuario + "! Entrada a las " + horaFmt + "\"}";
             }
 
         } catch (Exception e) {
