@@ -38,30 +38,37 @@ public class AdminDAO {
                 ResultSet rs = ps.executeQuery()) {
                 if(rs.next()) dash.setMembresiasVencidas(rs.getInt(1));
             }
-            // 5. Últimos Accesos (CORREGIDO CON HORA DE ECUADOR Y FORMATO LIMPIO)
+            // 5. Últimos Accesos (BLINDADO Y CON HORA DE ECUADOR)
             List<AccesoDTO> accesos = new ArrayList<>();
-            // El truco está aquí: Restamos 5 horas (INTERVAL '5 hours') y le damos formato limpio (TO_CHAR)
-            String sqlAccesos = "SELECT u.usuario, " +
-                    "TO_CHAR(a.fecha_hora_ingreso - INTERVAL '5 hours', 'HH24:MI:SS') AS ingreso_ec, " +
-                    "TO_CHAR(a.fecha_hora_salida - INTERVAL '5 hours', 'HH24:MI:SS') AS salida_ec " +
-                    "FROM asistencias a " +
-                    "INNER JOIN clientes c ON a.id_cliente = c.id_cliente " +
-                    "INNER JOIN usuarios u ON c.id_usuario = u.id_usuario " +
-                    "ORDER BY a.fecha_hora_ingreso DESC LIMIT 10";
+
+            // Restamos 5 horas directamente en la base de datos y le damos un alias "fecha_ec"
+            String sqlAccesos = "SELECT u.usuario, u.id_rol, " +
+                    "TO_CHAR(a.fecha_hora_log - INTERVAL '5 hours', 'YYYY-MM-DD HH24:MI:SS') AS fecha_ec, " +
+                    "a.direccion_ip, a.exitoso " +
+                    "FROM logs_acceso a " +
+                    "INNER JOIN usuarios u ON a.id_usuario = u.id_usuario " +
+                    "ORDER BY a.fecha_hora_log DESC LIMIT 5";
 
             try(PreparedStatement ps = conn.prepareStatement(sqlAccesos);
                 ResultSet rs = ps.executeQuery()) {
                 while(rs.next()) {
                     AccesoDTO acc = new AccesoDTO();
                     acc.setUsuario(rs.getString("usuario"));
-                    acc.setRol("Cliente");
-                    acc.setHoraIngreso(rs.getString("ingreso_ec"));
 
-                    // Si aún no ha salido, mostrar "En curso..."
-                    String salida = rs.getString("salida_ec");
-                    acc.setHoraSalida(salida != null ? salida : "---");
+                    int idRol = rs.getInt("id_rol");
+                    acc.setRol(idRol == 1 ? "Admin" : "Cliente");
 
-                    acc.setEstado(salida != null ? "Completado" : "Entrenando");
+                    // 1. Tomamos la hora ya ajustada a Ecuador. Si está vacía, ponemos "---" para que no se rompa la vista.
+                    String horaAjustada = rs.getString("fecha_ec");
+                    acc.setHoraIngreso(horaAjustada != null ? horaAjustada : "---");
+
+                    // 2. Tomamos la IP. Si llega nula de la base de datos, ponemos un valor por defecto.
+                    String ip = rs.getString("direccion_ip");
+                    acc.setIp(ip != null ? ip : "Desconocida");
+
+                    boolean esExitoso = rs.getBoolean("exitoso");
+                    acc.setEstado(esExitoso ? "Exitoso" : "Fallido");
+
                     accesos.add(acc);
                 }
             } catch (Exception e) {
