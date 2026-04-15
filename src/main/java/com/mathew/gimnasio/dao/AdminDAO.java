@@ -38,11 +38,12 @@ public class AdminDAO {
                 ResultSet rs = ps.executeQuery()) {
                 if(rs.next()) dash.setMembresiasVencidas(rs.getInt(1));
             }
-            // 4. Llenar la Tabla de Accesos al Sistema (Nombres exactos)
+            // 5. Últimos Accesos (CORREGIDO CON HORA DE ECUADOR Y FORMATO LIMPIO)
             List<AccesoDTO> accesos = new ArrayList<>();
-
-            // Usamos las columnas exactas de tu tabla: fecha_hora_log, direccion_ip, exitoso
-            String sqlAccesos = "SELECT u.usuario, u.id_rol, a.fecha_hora_log, a.direccion_ip, a.exitoso " +
+            // El truco está aquí: Restamos 5 horas (INTERVAL '5 hours') y le damos formato limpio (TO_CHAR)
+            String sqlAccesos = "SELECT u.usuario, u.id_rol, " +
+                    "TO_CHAR(a.fecha_hora_log - INTERVAL '5 hours', 'YYYY-MM-DD HH24:MI:SS') AS fecha_hora_ec, " +
+                    "a.direccion_ip, a.exitoso " +
                     "FROM logs_acceso a " +
                     "INNER JOIN usuarios u ON a.id_usuario = u.id_usuario " +
                     "ORDER BY a.fecha_hora_log DESC LIMIT 5";
@@ -56,10 +57,10 @@ public class AdminDAO {
                     int idRol = rs.getInt("id_rol");
                     acc.setRol(idRol == 1 ? "Admin" : "Cliente");
 
-                    acc.setHora(rs.getString("fecha_hora_log"));
+                    // Ahora leemos la nueva columna que ya viene ajustada a Ecuador
+                    acc.setHora(rs.getString("fecha_hora_ec"));
                     acc.setIp(rs.getString("direccion_ip"));
 
-                    // Convertir el boolean de tu BD a texto para que se pinte en la web
                     boolean esExitoso = rs.getBoolean("exitoso");
                     acc.setEstado(esExitoso ? "Exitoso" : "Fallido");
 
