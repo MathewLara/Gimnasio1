@@ -41,29 +41,27 @@ public class AdminDAO {
             // 5. Últimos Accesos (CORREGIDO CON HORA DE ECUADOR Y FORMATO LIMPIO)
             List<AccesoDTO> accesos = new ArrayList<>();
             // El truco está aquí: Restamos 5 horas (INTERVAL '5 hours') y le damos formato limpio (TO_CHAR)
-            String sqlAccesos = "SELECT u.usuario, u.id_rol, " +
-                    "TO_CHAR(a.fecha_hora_log - INTERVAL '5 hours', 'YYYY-MM-DD HH24:MI:SS') AS fecha_hora_ec, " +
-                    "a.direccion_ip, a.exitoso " +
-                    "FROM logs_acceso a " +
-                    "INNER JOIN usuarios u ON a.id_usuario = u.id_usuario " +
-                    "ORDER BY a.fecha_hora_log DESC LIMIT 5";
+            String sqlAccesos = "SELECT u.usuario, " +
+                    "TO_CHAR(a.fecha_hora_ingreso - INTERVAL '5 hours', 'HH24:MI:SS') AS ingreso_ec, " +
+                    "TO_CHAR(a.fecha_hora_salida - INTERVAL '5 hours', 'HH24:MI:SS') AS salida_ec " +
+                    "FROM asistencias a " +
+                    "INNER JOIN clientes c ON a.id_cliente = c.id_cliente " +
+                    "INNER JOIN usuarios u ON c.id_usuario = u.id_usuario " +
+                    "ORDER BY a.fecha_hora_ingreso DESC LIMIT 10";
 
             try(PreparedStatement ps = conn.prepareStatement(sqlAccesos);
                 ResultSet rs = ps.executeQuery()) {
                 while(rs.next()) {
                     AccesoDTO acc = new AccesoDTO();
                     acc.setUsuario(rs.getString("usuario"));
+                    acc.setRol("Cliente");
+                    acc.setHoraIngreso(rs.getString("ingreso_ec"));
 
-                    int idRol = rs.getInt("id_rol");
-                    acc.setRol(idRol == 1 ? "Admin" : "Cliente");
+                    // Si aún no ha salido, mostrar "En curso..."
+                    String salida = rs.getString("salida_ec");
+                    acc.setHoraSalida(salida != null ? salida : "---");
 
-                    // Ahora leemos la nueva columna que ya viene ajustada a Ecuador
-                    acc.setHora(rs.getString("fecha_hora_ec"));
-                    acc.setIp(rs.getString("direccion_ip"));
-
-                    boolean esExitoso = rs.getBoolean("exitoso");
-                    acc.setEstado(esExitoso ? "Exitoso" : "Fallido");
-
+                    acc.setEstado(salida != null ? "Completado" : "Entrenando");
                     accesos.add(acc);
                 }
             } catch (Exception e) {
