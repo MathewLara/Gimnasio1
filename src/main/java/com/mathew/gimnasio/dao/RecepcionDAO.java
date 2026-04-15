@@ -208,8 +208,8 @@ public class RecepcionDAO {
     public String obtenerHistorialPagosJSON() {
         StringBuilder json = new StringBuilder("[");
 
-        // Buscamos los pagos y cruzamos con clientes/usuarios para tener el nombre
-        String sql = "SELECT p.id_pago, u.usuario, p.monto_pagado, p.fecha_pago, p.metodo_pago, p.id_plan " +
+        // CORREGIDO: Usamos id_membresia y p.id_cliente que acabamos de crear
+        String sql = "SELECT p.id_pago, u.usuario, p.monto_pagado, p.fecha_pago, p.metodo_pago, p.id_membresia " +
                 "FROM pagos p " +
                 "INNER JOIN clientes c ON p.id_cliente = c.id_cliente " +
                 "INNER JOIN usuarios u ON c.id_usuario = u.id_usuario " +
@@ -222,7 +222,6 @@ public class RecepcionDAO {
             while(rs.next()) {
                 if(!first) json.append(",");
 
-                // Extraemos solo la fecha y hora sin los milisegundos
                 String fechaLimpia = rs.getString("fecha_pago");
                 if(fechaLimpia != null && fechaLimpia.length() > 19) {
                     fechaLimpia = fechaLimpia.substring(0, 19);
@@ -234,7 +233,7 @@ public class RecepcionDAO {
                         .append("\"monto\":").append(rs.getDouble("monto_pagado")).append(",")
                         .append("\"fecha\":\"").append(fechaLimpia).append("\",")
                         .append("\"metodo\":\"").append(rs.getString("metodo_pago")).append("\",")
-                        .append("\"id_plan\":").append(rs.getInt("id_plan"))
+                        .append("\"id_plan\":").append(rs.getInt("id_membresia")) // <--- CORREGIDO
                         .append("}");
                 first = false;
             }
@@ -249,9 +248,8 @@ public class RecepcionDAO {
     // 5. REGISTRAR UN NUEVO PAGO
     // ==========================================
     public boolean registrarPago(int idUsuarioEnviado, int idPlan, double monto, String metodo) {
-        // TRUCO: Como el JS nos manda el id_usuario, usamos un SELECT para
-        // encontrar automáticamente el id_cliente correcto e insertarlo en pagos.
-        String sql = "INSERT INTO pagos (id_cliente, id_plan, monto_pagado, metodo_pago, fecha_pago) " +
+        // CORREGIDO: Usamos id_membresia
+        String sql = "INSERT INTO pagos (id_cliente, id_membresia, monto_pagado, metodo_pago, fecha_pago) " +
                 "SELECT id_cliente, ?, ?, ?, CURRENT_TIMESTAMP " +
                 "FROM clientes WHERE id_usuario = ?";
 
@@ -261,12 +259,11 @@ public class RecepcionDAO {
             ps.setInt(1, idPlan);
             ps.setDouble(2, monto);
             ps.setString(3, metodo);
-            ps.setInt(4, idUsuarioEnviado); // El ID que manda el front es el id_usuario
+            ps.setInt(4, idUsuarioEnviado);
 
-            return ps.executeUpdate() > 0; // Si devuelve > 0, se insertó correctamente
+            return ps.executeUpdate() > 0;
 
         } catch (Exception e) {
-            // Si algo falla, el error exacto se imprimirá en los Logs de Render
             System.out.println("Error Registrando Pago en BD: " + e.getMessage());
             return false;
         }
