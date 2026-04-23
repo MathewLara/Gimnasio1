@@ -47,19 +47,18 @@ public class VentaDAO {
             int idPago = 0;
             if (rsPago.next()) idPago = rsPago.getInt(1);
 
-            /* 3. CREAR EL ENCABEZADO DE LA FACTURA
-             * Generamos un número de factura único usando el tiempo actual (FAC-timestamp).
-             * Vinculamos esta factura con el ID del pago que acabamos de crear arriba.
-             */
+            /* 3. CREAR EL ENCABEZADO DE LA FACTURA */
             String numFactura = "FAC-" + System.currentTimeMillis();
-            String sqlFactura = "INSERT INTO factura_encabezados (id_pago, numero_factura, subtotal, iva, total_pagado, fecha_emision) VALUES (?, ?, ?, 0, ?, NOW()) RETURNING id_factura";
-            psFactura = conn.prepareStatement(sqlFactura);
+            String sqlFactura = "INSERT INTO factura_encabezados (id_pago, numero_factura, subtotal, iva, total_pagado, fecha_emision, id_usuario) VALUES (?, ?, ?, 0, ?, NOW(), ?)";
+            psFactura = conn.prepareStatement(sqlFactura, Statement.RETURN_GENERATED_KEYS);
             psFactura.setInt(1, idPago);
             psFactura.setString(2, numFactura);
             psFactura.setDouble(3, venta.getTotal());
             psFactura.setDouble(4, venta.getTotal());
-            rsFactura = psFactura.executeQuery();
+            psFactura.setInt(5, venta.getIdUsuario()); // NUEVO: Guardamos el ID del cliente
+            psFactura.executeUpdate();
 
+            rsFactura = psFactura.getGeneratedKeys();
             int idFactura = 0;
             if (rsFactura.next()) idFactura = rsFactura.getInt(1);
 
@@ -158,8 +157,12 @@ public class VentaDAO {
     // 1. Obtener todas las facturas que están pendientes
     public java.util.List<com.mathew.gimnasio.modelos.VentaPendienteDTO> obtenerVentasPendientes() {
         java.util.List<com.mathew.gimnasio.modelos.VentaPendienteDTO> lista = new java.util.ArrayList<>();
-        // Buscamos solo las facturas que tengan el estado PENDIENTE
-        String sql = "SELECT id_factura, numero_factura, total_pagado, fecha_emision FROM factura_encabezados WHERE estado_entrega = 'PENDIENTE'";
+        // SQL con JOIN para traer el nombre del usuario
+        String sql = "SELECT f.id_factura, f.numero_factura, f.total_pagado, f.fecha_emision, " +
+                "u.nombre || ' ' || u.apellido as nombre_cliente " +
+                "FROM factura_encabezados f " +
+                "JOIN usuarios u ON f.id_usuario = u.id " +
+                "WHERE f.estado_entrega = 'PENDIENTE'";
 
         try (Connection conn = ConexionDB.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql);
@@ -171,11 +174,10 @@ public class VentaDAO {
                 v.setNumeroFactura(rs.getString("numero_factura"));
                 v.setTotalPagado(rs.getDouble("total_pagado"));
                 v.setFechaEmision(rs.getString("fecha_emision"));
+                v.setNombreCliente(rs.getString("nombre_cliente")); // Necesitas agregar este campo al DTO
                 lista.add(v);
             }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        } catch (Exception e) { e.printStackTrace(); }
         return lista;
     }
 

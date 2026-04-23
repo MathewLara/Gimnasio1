@@ -7,6 +7,8 @@ public class VentaPendienteDTO implements Serializable {
     private String numeroFactura;
     private double totalPagado;
     private String fechaEmision;
+    private String estadoEntrega;
+    private String nombreCliente;
 
     // Getters y Setters
     public int getIdFactura() { return idFactura; }
@@ -20,4 +22,11 @@ public class VentaPendienteDTO implements Serializable {
 
     public String getFechaEmision() { return fechaEmision; }
     public void setFechaEmision(String fechaEmision) { this.fechaEmision = fechaEmision; }
+
+    public String getEstadoEntrega() { return estadoEntrega; }
+    public void setEstadoEntrega(String estadoEntrega) { this.estadoEntrega = estadoEntrega; }
+
+    public String getNombreCliente() { return nombreCliente; }
+    public void setNombreCliente(String nombreCliente) { this.nombreCliente = nombreCliente; }
+
 }
