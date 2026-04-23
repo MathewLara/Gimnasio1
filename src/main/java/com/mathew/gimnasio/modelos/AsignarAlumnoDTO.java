@@ -4,6 +4,7 @@ import java.io.Serializable;
 
 public class AsignarAlumnoDTO implements Serializable {
     public int idCliente;
-    public Integer idRutinaAsignada; // Puede ser null si se elige "Ninguna"
+    public int idEntrenador;
+    public Integer idRutinaAsignada;
     public String notas;
 }
