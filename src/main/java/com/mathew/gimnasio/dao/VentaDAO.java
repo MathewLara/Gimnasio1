@@ -154,15 +154,19 @@ public class VentaDAO {
     // GESTIÓN DE PEDIDOS PARA EL ADMINISTRADOR
     // ==========================================
 
-    // 1. Obtener todas las facturas que están pendientes
+    // 1. Obtener todas las facturas (Pendientes y Entregadas)
     public java.util.List<com.mathew.gimnasio.modelos.VentaPendienteDTO> obtenerVentasPendientes() {
         java.util.List<com.mathew.gimnasio.modelos.VentaPendienteDTO> lista = new java.util.ArrayList<>();
-        // SQL con JOIN para traer el nombre del usuario
-        String sql = "SELECT f.id_factura, f.numero_factura, f.total_pagado, f.fecha_emision, " +
-                "u.nombre || ' ' || u.apellido as nombre_cliente " +
+
+        // MODIFICACIÓN SQL:
+        // - Usamos COALESCE para que si el apellido es nulo, no arruine el nombre.
+        // - Traemos f.estado_entrega.
+        // - Quitamos el WHERE y ponemos ORDER BY para ver los recientes primero.
+        String sql = "SELECT f.id_factura, f.numero_factura, f.total_pagado, f.fecha_emision, f.estado_entrega, " +
+                "COALESCE(u.nombre, 'Usuario') || ' ' || COALESCE(u.apellido, '') as nombre_cliente " +
                 "FROM factura_encabezados f " +
-                "JOIN usuarios u ON f.id_usuario = u.id " +
-                "WHERE f.estado_entrega = 'PENDIENTE'";
+                "LEFT JOIN usuarios u ON f.id_usuario = u.id " +
+                "ORDER BY f.fecha_emision DESC";
 
         try (Connection conn = ConexionDB.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql);
@@ -174,7 +178,11 @@ public class VentaDAO {
                 v.setNumeroFactura(rs.getString("numero_factura"));
                 v.setTotalPagado(rs.getDouble("total_pagado"));
                 v.setFechaEmision(rs.getString("fecha_emision"));
-                v.setNombreCliente(rs.getString("nombre_cliente")); // Necesitas agregar este campo al DTO
+                v.setNombreCliente(rs.getString("nombre_cliente"));
+
+                // NUEVO: Extraemos el estado de la base de datos y lo metemos en el DTO
+                v.setEstadoEntrega(rs.getString("estado_entrega"));
+
                 lista.add(v);
             }
         } catch (Exception e) { e.printStackTrace(); }
