@@ -230,20 +230,21 @@ public class EntrenadorDAO {
 
             // Desactivamos cualquier rutina anterior que tuviera con este entrenador
             ps = conn.prepareStatement("UPDATE rutinas SET activa = FALSE WHERE id_cliente = ? AND id_entrenador = ?");
-            ps.setInt(1, datos.idCliente);
+            ps.setInt(1, datos.getIdCliente());
             ps.setInt(2, idEntrenador);
             ps.executeUpdate();
 
-            if (datos.idRutinaAsignada != null && datos.idRutinaAsignada > 0) {
+            // Si envió un ID mayor a 0, significa que eligió una rutina
+            if (datos.getIdRutinaAsignada() > 0) {
                 // CLONAR LA RUTINA (Para no quitársela a otro cliente)
                 String nombreClon = "Rutina Asignada";
                 ps = conn.prepareStatement("SELECT nombre_rutina FROM rutinas WHERE id_rutina = ?");
-                ps.setInt(1, datos.idRutinaAsignada);
+                ps.setInt(1, datos.getIdRutinaAsignada());
                 rs = ps.executeQuery();
                 if(rs.next()) nombreClon = rs.getString(1);
 
                 ps = conn.prepareStatement("INSERT INTO rutinas (id_cliente, id_entrenador, nombre_rutina, fecha_creacion, activa) VALUES (?, ?, ?, CURRENT_DATE, TRUE) RETURNING id_rutina");
-                ps.setInt(1, datos.idCliente);
+                ps.setInt(1, datos.getIdCliente());
                 ps.setInt(2, idEntrenador);
                 ps.setString(3, nombreClon);
                 rs = ps.executeQuery();
@@ -255,20 +256,20 @@ public class EntrenadorDAO {
                     // Copiar todos los ejercicios a la nueva rutina del cliente
                     ps = conn.prepareStatement("INSERT INTO detalle_rutinas (id_rutina, id_ejercicio, series, repeticiones) SELECT ?, id_ejercicio, series, repeticiones FROM detalle_rutinas WHERE id_rutina = ?");
                     ps.setInt(1, nuevaRutinaId);
-                    ps.setInt(2, datos.idRutinaAsignada);
+                    ps.setInt(2, datos.getIdRutinaAsignada());
                     ps.executeUpdate();
                 }
             } else {
                 // Si eligió "Ninguna", le creamos una rutina en blanco
                 ps = conn.prepareStatement("INSERT INTO rutinas (id_cliente, id_entrenador, nombre_rutina, fecha_creacion, activa) VALUES (?, ?, 'Plan de Entrenamiento', CURRENT_DATE, TRUE)");
-                ps.setInt(1, datos.idCliente);
+                ps.setInt(1, datos.getIdCliente());
                 ps.setInt(2, idEntrenador);
                 ps.executeUpdate();
             }
 
             // Limpiamos el historial de hoy para que el alumno empiece fresco
             ps = conn.prepareStatement("DELETE FROM historial_entrenamientos WHERE id_cliente = ? AND fecha = CURRENT_DATE");
-            ps.setInt(1, datos.idCliente);
+            ps.setInt(1, datos.getIdCliente());
             ps.executeUpdate();
 
             conn.commit();
