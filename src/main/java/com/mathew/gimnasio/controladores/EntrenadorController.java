@@ -111,4 +111,48 @@ public class EntrenadorController {
         if (exito) return Response.ok("{\"mensaje\": \"Rutina restaurada\"}").build();
         return Response.status(500).entity("{\"mensaje\": \"Error al restaurar\"}").build();
     }
+    // ==========================================
+    // NUEVOS ENDPOINTS: GESTIÓN DE ALUMNOS
+    // ==========================================
+
+    /**
+     * VINCULAR UN NUEVO ALUMNO
+     * URL: POST /api/entrenadores/{id}/alumnos
+     */
+    @POST
+    @Path("/{idUsuario}/alumnos")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response vincularAlumno(@PathParam("idUsuario") int idUsuario, com.mathew.gimnasio.modelos.AsignarAlumnoDTO datos) {
+        boolean exito = dao.vincularAlumno(idUsuario, datos);
+        if (exito) return Response.ok("{\"mensaje\": \"Alumno vinculado exitosamente\"}").build();
+        return Response.status(500).entity("{\"mensaje\": \"Error al vincular alumno\"}").build();
+    }
+
+    /**
+     * EDITAR LA RUTINA DE UN ALUMNO (Usa la misma lógica de vinculación para reasignar)
+     * URL: PUT /api/entrenadores/{id}/alumnos
+     */
+    @PUT
+    @Path("/{idUsuario}/alumnos")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response actualizarAlumno(@PathParam("idUsuario") int idUsuario, com.mathew.gimnasio.modelos.AsignarAlumnoDTO datos) {
+        boolean exito = dao.vincularAlumno(idUsuario, datos);
+        if (exito) return Response.ok("{\"mensaje\": \"Rutina del alumno actualizada\"}").build();
+        return Response.status(500).entity("{\"mensaje\": \"Error al actualizar alumno\"}").build();
+    }
+
+    /**
+     * DESVINCULAR A UN ALUMNO
+     * URL: DELETE /api/entrenadores/{id}/alumnos/{idCliente}
+     */
+    @DELETE
+    @Path("/{idUsuario}/alumnos/{idCliente}")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response desvincularAlumno(@PathParam("idUsuario") int idUsuario, @PathParam("idCliente") int idCliente) {
+        boolean exito = dao.desvincularAlumno(idUsuario, idCliente);
+        if (exito) return Response.ok("{\"mensaje\": \"Alumno desvinculado\"}").build();
+        return Response.status(500).entity("{\"mensaje\": \"Error al desvincular alumno\"}").build();
+    }
 }

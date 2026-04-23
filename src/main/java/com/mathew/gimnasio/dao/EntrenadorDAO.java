@@ -1,6 +1,7 @@
 package com.mathew.gimnasio.dao;
 
 import com.mathew.gimnasio.configuracion.ConexionDB;
+import com.mathew.gimnasio.modelos.AsignarAlumnoDTO;
 import com.mathew.gimnasio.modelos.EntrenadorDashboardDTO;
 import com.mathew.gimnasio.modelos.NuevaRutinaDTO;
 import java.sql.Connection;
@@ -284,6 +285,67 @@ public class EntrenadorDAO {
             String sql = "UPDATE rutinas SET activa = TRUE WHERE id_rutina = ?";
             PreparedStatement ps = conn.prepareStatement(sql);
             ps.setInt(1, idRutina);
+            return ps.executeUpdate() > 0;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+    // ==========================================
+    // NUEVO: VINCULAR O EDITAR ALUMNO
+    // ==========================================
+    public boolean vincularAlumno(int idUsuarioEntrenador, AsignarAlumnoDTO datos) {
+        try (Connection conn = ConexionDB.getConnection()) {
+            // 1. Obtener el ID interno del entrenador
+            int idEntrenador = 0;
+            PreparedStatement ps = conn.prepareStatement("SELECT id_entrenador FROM entrenadores WHERE id_usuario = ?");
+            ps.setInt(1, idUsuarioEntrenador);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) idEntrenador = rs.getInt(1);
+            else return false;
+
+            if (datos.idRutinaAsignada != null && datos.idRutinaAsignada > 0) {
+                // Si el profe eligió una rutina, se la asignamos a este cliente
+                ps = conn.prepareStatement("UPDATE rutinas SET id_cliente = ? WHERE id_rutina = ? AND id_entrenador = ?");
+                ps.setInt(1, datos.idCliente);
+                ps.setInt(2, datos.idRutinaAsignada);
+                ps.setInt(3, idEntrenador);
+                ps.executeUpdate();
+            } else {
+                // Si eligió "Ninguna", creamos una rutina en blanco para que el sistema reconozca el vínculo
+                ps = conn.prepareStatement("INSERT INTO rutinas (id_cliente, id_entrenador, nombre_rutina, fecha_creacion, activa) VALUES (?, ?, 'Rutina Base (Sin ejercicios)', CURRENT_DATE, TRUE)");
+                ps.setInt(1, datos.idCliente);
+                ps.setInt(2, idEntrenador);
+                ps.executeUpdate();
+            }
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    // ==========================================
+    // NUEVO: DESVINCULAR ALUMNO
+    // ==========================================
+    public boolean desvincularAlumno(int idUsuarioEntrenador, int idCliente) {
+        try (Connection conn = ConexionDB.getConnection()) {
+            int idEntrenador = 0;
+            PreparedStatement ps = conn.prepareStatement("SELECT id_entrenador FROM entrenadores WHERE id_usuario = ?");
+            ps.setInt(1, idUsuarioEntrenador);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) idEntrenador = rs.getInt(1);
+
+            // Para desvincular al alumno, desactivamos las rutinas que este entrenador le había dado
+            ps = conn.prepareStatement("UPDATE rutinas SET activa = FALSE WHERE id_cliente = ? AND id_entrenador = ?");
+            ps.setInt(1, idCliente);
+            ps.setInt(2, idEntrenador);
+
+            // Eliminamos el historial de hoy si tenía uno
+            PreparedStatement ps2 = conn.prepareStatement("DELETE FROM historial_entrenamientos WHERE id_cliente = ? AND fecha = CURRENT_DATE");
+            ps2.setInt(1, idCliente);
+            ps2.executeUpdate();
+
             return ps.executeUpdate() > 0;
         } catch (Exception e) {
             e.printStackTrace();
