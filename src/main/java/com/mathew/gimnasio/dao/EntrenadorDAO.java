@@ -200,9 +200,14 @@ public class EntrenadorDAO {
         }
     }
 
+    // ==========================================
+    // REACTIVAR RUTINA (CORREGIDO: LIMPIA EL CLIENTE)
+    // ==========================================
     public boolean reactivarRutina(int idRutina) {
         try (Connection conn = ConexionDB.getConnection()) {
-            String sql = "UPDATE rutinas SET activa = TRUE WHERE id_rutina = ?";
+            // Al restaurar una rutina de la papelera, le ponemos id_cliente = 0
+            // Así vuelve a tu biblioteca como una PLANTILLA y no reactiva al alumno
+            String sql = "UPDATE rutinas SET activa = TRUE, id_cliente = 0 WHERE id_rutina = ?";
             PreparedStatement ps = conn.prepareStatement(sql);
             ps.setInt(1, idRutina);
             return ps.executeUpdate() > 0;
@@ -213,13 +218,13 @@ public class EntrenadorDAO {
     }
 
     // ==========================================
-    // MÉTODO CORREGIDO: VINCULAR NUEVO ALUMNO
+    // VINCULAR ALUMNO (CORREGIDO: SIEMPRE CLONA)
     // ==========================================
     public boolean vincularAlumno(int idUsuarioEntrenador, AsignarAlumnoDTO datos) {
         Connection conn = null;
         try {
             conn = ConexionDB.getConnection();
-            conn.setAutoCommit(false); // Transacción segura
+            conn.setAutoCommit(false);
 
             int idEntrenador = 0;
             PreparedStatement ps = conn.prepareStatement("SELECT id_entrenador FROM entrenadores WHERE id_usuario = ?");
@@ -228,58 +233,51 @@ public class EntrenadorDAO {
             if (rs.next()) idEntrenador = rs.getInt(1);
             else return false;
 
-            // Desactivamos cualquier rutina anterior que tuviera con este entrenador
+            // 1. Si ya tenía rutinas con este profe, las "limpiamos" (desactivamos) para poner la nueva
             ps = conn.prepareStatement("UPDATE rutinas SET activa = FALSE WHERE id_cliente = ? AND id_entrenador = ?");
             ps.setInt(1, datos.getIdCliente());
             ps.setInt(2, idEntrenador);
             ps.executeUpdate();
 
-            // Si envió un ID mayor a 0, significa que eligió una rutina
+            // 2. Si eligió una rutina de la biblioteca, la CLONAMOS específicamente para este alumno
             if (datos.getIdRutinaAsignada() > 0) {
-                // CLONAR LA RUTINA (Para no quitársela a otro cliente)
-                String nombreClon = "Rutina Asignada";
+                String nombreOriginal = "Rutina Personalizada";
                 ps = conn.prepareStatement("SELECT nombre_rutina FROM rutinas WHERE id_rutina = ?");
                 ps.setInt(1, datos.getIdRutinaAsignada());
                 rs = ps.executeQuery();
-                if(rs.next()) nombreClon = rs.getString(1);
+                if(rs.next()) nombreOriginal = rs.getString(1);
 
+                // Insertamos la copia
                 ps = conn.prepareStatement("INSERT INTO rutinas (id_cliente, id_entrenador, nombre_rutina, fecha_creacion, activa) VALUES (?, ?, ?, CURRENT_DATE, TRUE) RETURNING id_rutina");
                 ps.setInt(1, datos.getIdCliente());
                 ps.setInt(2, idEntrenador);
-                ps.setString(3, nombreClon);
+                ps.setString(3, nombreOriginal + " (Asignada)");
                 rs = ps.executeQuery();
 
-                int nuevaRutinaId = 0;
-                if(rs.next()) nuevaRutinaId = rs.getInt(1);
-
-                if(nuevaRutinaId > 0) {
-                    // Copiar todos los ejercicios a la nueva rutina del cliente
+                if(rs.next()) {
+                    int nuevaId = rs.getInt(1);
+                    // Copiamos los ejercicios de la original a la copia del alumno
                     ps = conn.prepareStatement("INSERT INTO detalle_rutinas (id_rutina, id_ejercicio, series, repeticiones) SELECT ?, id_ejercicio, series, repeticiones FROM detalle_rutinas WHERE id_rutina = ?");
-                    ps.setInt(1, nuevaRutinaId);
+                    ps.setInt(1, nuevaId);
                     ps.setInt(2, datos.getIdRutinaAsignada());
                     ps.executeUpdate();
                 }
             } else {
-                // Si eligió "Ninguna", le creamos una rutina en blanco
-                ps = conn.prepareStatement("INSERT INTO rutinas (id_cliente, id_entrenador, nombre_rutina, fecha_creacion, activa) VALUES (?, ?, 'Plan de Entrenamiento', CURRENT_DATE, TRUE)");
+                // Si no eligió ninguna, creamos una vacía
+                ps = conn.prepareStatement("INSERT INTO rutinas (id_cliente, id_entrenador, nombre_rutina, fecha_creacion, activa) VALUES (?, ?, 'Nueva Rutina', CURRENT_DATE, TRUE)");
                 ps.setInt(1, datos.getIdCliente());
                 ps.setInt(2, idEntrenador);
                 ps.executeUpdate();
             }
 
-            // Limpiamos el historial de hoy para que el alumno empiece fresco
-            ps = conn.prepareStatement("DELETE FROM historial_entrenamientos WHERE id_cliente = ? AND fecha = CURRENT_DATE");
-            ps.setInt(1, datos.getIdCliente());
-            ps.executeUpdate();
-
             conn.commit();
             return true;
         } catch (Exception e) {
+            if (conn != null) try { conn.rollback(); } catch (Exception ex) {}
             e.printStackTrace();
-            try { if (conn != null) conn.rollback(); } catch(Exception ex) {}
             return false;
         } finally {
-            try { if (conn != null) conn.close(); } catch(Exception ex) {}
+            try { if (conn != null) conn.close(); } catch (Exception ex) {}
         }
     }
 
