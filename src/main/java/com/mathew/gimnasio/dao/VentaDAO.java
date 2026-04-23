@@ -206,4 +206,30 @@ public class VentaDAO {
             return false;
         }
     }
+    // ==========================================
+    // OBTENER DETALLES PARA IMPRIMIR FACTURA
+    // ==========================================
+    public java.util.List<java.util.Map<String, Object>> obtenerDetallesFactura(int idFactura) {
+        java.util.List<java.util.Map<String, Object>> detalles = new java.util.ArrayList<>();
+        String sql = "SELECT descripcion, cantidad, precio_unitario, subtotal_linea FROM factura_detalles WHERE id_factura = ?";
+
+        try (Connection conn = ConexionDB.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, idFactura);
+            ResultSet rs = ps.executeQuery();
+
+            while(rs.next()) {
+                java.util.Map<String, Object> item = new java.util.HashMap<>();
+                item.put("descripcion", rs.getString("descripcion"));
+                item.put("cantidad", rs.getInt("cantidad"));
+                item.put("precioUnitario", rs.getDouble("precio_unitario"));
+                item.put("subtotalLinea", rs.getDouble("subtotal_linea"));
+                detalles.add(item);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return detalles;
+    }
 }

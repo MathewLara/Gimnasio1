@@ -106,4 +106,15 @@ public class VentaController {
             return Response.status(500).entity("{\"mensaje\":\"Error al actualizar el estado de la entrega\"}").build();
         }
     }
+    /**
+     * ENDPOINT: Obtener detalles de una factura para imprimir
+     * GET /api/ventas/{id}/detalles
+     */
+    @GET
+    @Path("/{id}/detalles")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response getDetallesFactura(@PathParam("id") int idFactura) {
+        java.util.List<java.util.Map<String, Object>> detalles = ventaDAO.obtenerDetallesFactura(idFactura);
+        return Response.ok(detalles).build();
+    }
 }
