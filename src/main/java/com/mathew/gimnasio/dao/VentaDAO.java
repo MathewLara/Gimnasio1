@@ -107,7 +107,7 @@ public class VentaDAO {
         }
     }
     // ==========================================
-    // PAGO DE MEMBRESÍAS (MOCK FINANCIERO)
+    // PAGO DE MEMBRESÍAS
     // ==========================================
     public String registrarPagoMembresia(int idUsuario, int idMembresia, double monto, int dias) {
         Connection conn = null;
@@ -149,6 +149,50 @@ public class VentaDAO {
             return "Error BD: " + e.getMessage();
         } finally {
             try { if (conn != null) { conn.setAutoCommit(true); conn.close(); } } catch (Exception e) {}
+        }
+    }
+    // ==========================================
+    // GESTIÓN DE PEDIDOS PARA EL ADMINISTRADOR
+    // ==========================================
+
+    // 1. Obtener todas las facturas que están pendientes
+    public java.util.List<com.mathew.gimnasio.modelos.VentaPendienteDTO> obtenerVentasPendientes() {
+        java.util.List<com.mathew.gimnasio.modelos.VentaPendienteDTO> lista = new java.util.ArrayList<>();
+        // Buscamos solo las facturas que tengan el estado PENDIENTE
+        String sql = "SELECT id_factura, numero_factura, total_pagado, fecha_emision FROM factura_encabezados WHERE estado_entrega = 'PENDIENTE'";
+
+        try (Connection conn = ConexionDB.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+
+            while (rs.next()) {
+                com.mathew.gimnasio.modelos.VentaPendienteDTO v = new com.mathew.gimnasio.modelos.VentaPendienteDTO();
+                v.setIdFactura(rs.getInt("id_factura"));
+                v.setNumeroFactura(rs.getString("numero_factura"));
+                v.setTotalPagado(rs.getDouble("total_pagado"));
+                v.setFechaEmision(rs.getString("fecha_emision"));
+                lista.add(v);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return lista;
+    }
+
+    // 2. Cambiar el estado a ENTREGADO
+    public boolean marcarComoEntregado(int idFactura) {
+        // Actualizamos el estado en la base de datos
+        String sql = "UPDATE factura_encabezados SET estado_entrega = 'ENTREGADO' WHERE id_factura = ?";
+        try (Connection conn = ConexionDB.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, idFactura);
+            int filasAfectadas = ps.executeUpdate();
+            return filasAfectadas > 0;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
         }
     }
 }

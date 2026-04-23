@@ -78,4 +78,32 @@ public class VentaController {
             return Response.status(500).entity("{\"mensaje\":\"" + resultado + "\"}").build();
         }
     }
+    /**
+     * ENDPOINT: Obtener pedidos pendientes para el Dashboard del Admin
+     * GET /api/ventas/pendientes
+     */
+    @GET
+    @Path("/pendientes")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response getVentasPendientes() {
+        java.util.List<com.mathew.gimnasio.modelos.VentaPendienteDTO> pendientes = ventaDAO.obtenerVentasPendientes();
+        return Response.ok(pendientes).build();
+    }
+
+    /**
+     * ENDPOINT: Marcar un producto como entregado
+     * PUT /api/ventas/{id}/entregar
+     */
+    @PUT
+    @Path("/{id}/entregar")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response entregarProducto(@PathParam("id") int idFactura) {
+        boolean exito = ventaDAO.marcarComoEntregado(idFactura);
+
+        if (exito) {
+            return Response.ok("{\"mensaje\":\"Producto marcado como entregado\"}").build();
+        } else {
+            return Response.status(500).entity("{\"mensaje\":\"Error al actualizar el estado de la entrega\"}").build();
+        }
+    }
 }
