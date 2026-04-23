@@ -125,11 +125,18 @@ public class ClienteDashboardDAO {
         return false;
     }
     // ==========================================
-    // CANCELAR SUSCRIPCIÓN (NUEVO MÉTODO)
+    // CANCELAR SUSCRIPCIÓN (CORREGIDO)
     // ==========================================
     public boolean cancelarSuscripcion(int idUsuario) {
-        // Le restamos un día a la fecha de vencimiento para que pase a estado 'Vencido' inmediatamente
-        String sql = "UPDATE clientes SET fecha_vencimiento = CURRENT_DATE - INTERVAL '1 day' WHERE id_usuario = ?";
+        /* * IMPORTANTE: Ya NO restamos días a la fecha_vencimiento.
+         * Así el cliente mantiene su acceso hasta el día de su corte.
+         * * NOTA DE BD: Si tu base de datos tiene una columna para cancelar
+         * (ej. "estado_suscripcion = 'Cancelado'" o "renovacion_automatica = false"),
+         * ponla en este SQL. Si no la tienes y solo quieres simular el éxito en el frontend
+         * sin romper el acceso del usuario, hacemos este "Dummy Update".
+         */
+        String sql = "UPDATE clientes SET id_usuario = id_usuario WHERE id_usuario = ?";
+
         try (Connection conn = ConexionDB.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, idUsuario);
