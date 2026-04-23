@@ -6,6 +6,7 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.POST;
+import jakarta.ws.rs.PUT;
 
 /**
  * CONTROLADOR DE CLIENTES
@@ -58,6 +59,22 @@ public class ClienteController {
             // Si devuelve false, asumimos que ya estaba registrado hoy, pero respondemos OK
             // para que el cliente vea el botón verde y no se preocupe.
             return Response.ok("{\"mensaje\": \"Ya estaba registrado hoy\"}").build();
+        }
+    }
+    /**
+     * Procesa la cancelación de la suscripción del cliente.
+     * URL: PUT /api/clientes/{idUsuario}/cancelar
+     */
+    @PUT
+    @Path("/{idUsuario}/cancelar")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response cancelarSuscripcion(@PathParam("idUsuario") int id) {
+        boolean exito = dao.cancelarSuscripcion(id);
+
+        if (exito) {
+            return Response.ok("{\"mensaje\": \"Suscripción cancelada permanentemente\"}").build();
+        } else {
+            return Response.status(500).entity("{\"mensaje\": \"Error al cancelar la suscripción\"}").build();
         }
     }
 }

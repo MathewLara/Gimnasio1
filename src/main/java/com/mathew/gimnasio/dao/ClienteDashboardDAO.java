@@ -124,4 +124,19 @@ public class ClienteDashboardDAO {
         } catch (Exception e) { e.printStackTrace(); }
         return false;
     }
+    // ==========================================
+    // CANCELAR SUSCRIPCIÓN (NUEVO MÉTODO)
+    // ==========================================
+    public boolean cancelarSuscripcion(int idUsuario) {
+        // Le restamos un día a la fecha de vencimiento para que pase a estado 'Vencido' inmediatamente
+        String sql = "UPDATE clientes SET fecha_vencimiento = CURRENT_DATE - INTERVAL '1 day' WHERE id_usuario = ?";
+        try (Connection conn = ConexionDB.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, idUsuario);
+            return ps.executeUpdate() > 0;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
 }
