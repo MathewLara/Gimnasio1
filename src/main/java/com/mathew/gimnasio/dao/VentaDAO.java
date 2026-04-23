@@ -162,10 +162,11 @@ public class VentaDAO {
         // - Usamos COALESCE para que si el apellido es nulo, no arruine el nombre.
         // - Traemos f.estado_entrega.
         // - Quitamos el WHERE y ponemos ORDER BY para ver los recientes primero.
+        // Busca esta parte en tu VentaDAO.java y reemplázala
         String sql = "SELECT f.id_factura, f.numero_factura, f.total_pagado, f.fecha_emision, f.estado_entrega, " +
-                "COALESCE(u.nombre, 'Usuario') || ' ' || COALESCE(u.apellido, '') as nombre_cliente " +
+                "COALESCE(c.nombre, 'Cliente') || ' ' || COALESCE(c.apellido, 'Web') as nombre_cliente " +
                 "FROM factura_encabezados f " +
-                "LEFT JOIN usuarios u ON f.id_usuario = u.id_usuario " + // <-- Corregido u.id_usuario
+                "LEFT JOIN clientes c ON f.id_usuario = c.id_usuario " + // <-- Unimos con la tabla clientes
                 "ORDER BY f.fecha_emision DESC";
 
         try (Connection conn = ConexionDB.getConnection();
