@@ -165,7 +165,7 @@ public class VentaDAO {
         String sql = "SELECT f.id_factura, f.numero_factura, f.total_pagado, f.fecha_emision, f.estado_entrega, " +
                 "COALESCE(u.nombre, 'Usuario') || ' ' || COALESCE(u.apellido, '') as nombre_cliente " +
                 "FROM factura_encabezados f " +
-                "LEFT JOIN usuarios u ON f.id_usuario = u.id " +
+                "LEFT JOIN usuarios u ON f.id_usuario = u.id_usuario " + // <-- Corregido u.id_usuario
                 "ORDER BY f.fecha_emision DESC";
 
         try (Connection conn = ConexionDB.getConnection();
