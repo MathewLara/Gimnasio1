@@ -15,6 +15,7 @@ public class ResumenClienteDTO implements Serializable {
     public Double precioPlan;
     public String fechaVencimiento;
     public String estadoMembresia;
+    public boolean cancelado;
 
     // CAMPOS PARA LAS TARJETAS SUPERIORES
     public String ultimoIngreso;

@@ -16,7 +16,7 @@ public class ClienteDashboardDAO {
 
             /* 1. PERFIL Y ESTADO DE MEMBRESÍA */
             String sql = "SELECT c.id_cliente, c.nombre || ' ' || c.apellido as n, c.email, c.telefono, " +
-                    "m.nombre as plan, m.precio, c.fecha_vencimiento, " +
+                    "m.nombre as plan, m.precio, c.fecha_vencimiento, c.cancelado, " + // <--- AÑADE c.cancelado
                     "CASE WHEN c.fecha_vencimiento >= CURRENT_DATE THEN 'Activo' ELSE 'Vencido' END as estado " +
                     "FROM clientes c " +
                     "LEFT JOIN membresias m ON c.id_membresia = m.id_membresia " +
@@ -36,6 +36,7 @@ public class ClienteDashboardDAO {
                 dto.precioPlan = rs.getDouble("precio");
                 dto.fechaVencimiento = rs.getString("fecha_vencimiento");
                 dto.estadoMembresia = rs.getString("estado");
+                dto.cancelado = rs.getBoolean("cancelado");
             } else return null;
 
             /* 2. HISTORIAL DE ASISTENCIAS (AJUSTE HORA ECUADOR) */
@@ -128,15 +129,8 @@ public class ClienteDashboardDAO {
     // CANCELAR SUSCRIPCIÓN (CORREGIDO)
     // ==========================================
     public boolean cancelarSuscripcion(int idUsuario) {
-        /* * IMPORTANTE: Ya NO restamos días a la fecha_vencimiento.
-         * Así el cliente mantiene su acceso hasta el día de su corte.
-         * * NOTA DE BD: Si tu base de datos tiene una columna para cancelar
-         * (ej. "estado_suscripcion = 'Cancelado'" o "renovacion_automatica = false"),
-         * ponla en este SQL. Si no la tienes y solo quieres simular el éxito en el frontend
-         * sin romper el acceso del usuario, hacemos este "Dummy Update".
-         */
-        String sql = "UPDATE clientes SET id_usuario = id_usuario WHERE id_usuario = ?";
-
+        // Ahora sí guardamos el estado de cancelación real
+        String sql = "UPDATE clientes SET cancelado = TRUE WHERE id_usuario = ?";
         try (Connection conn = ConexionDB.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, idUsuario);
