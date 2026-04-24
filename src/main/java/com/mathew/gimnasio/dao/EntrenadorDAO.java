@@ -20,8 +20,8 @@ public class EntrenadorDAO {
         ResultSet rs = ps.executeQuery();
         if (rs.next()) return rs.getInt(1);
 
-        // Si no existe el fantasma, lo creamos silenciosamente
-        ps = conn.prepareStatement("INSERT INTO clientes (nombre, apellido, correo, telefono, fecha_registro) VALUES ('Plantilla', 'Sistema', 'plantilla@sistema.com', '0000000000', CURRENT_DATE) RETURNING id_cliente");
+        // CORRECCIÓN: Usamos 'email' (no correo) y quitamos 'fecha_registro'
+        ps = conn.prepareStatement("INSERT INTO clientes (nombre, apellido, email, telefono) VALUES ('Plantilla', 'Sistema', 'plantilla@sistema.com', '0000000000') RETURNING id_cliente");
         rs = ps.executeQuery();
         if (rs.next()) return rs.getInt(1);
         return 0;
@@ -254,21 +254,23 @@ public class EntrenadorDAO {
             if (rs.next()) {
                 realIdCliente = rs.getInt(1);
             } else {
-                ps = conn.prepareStatement("SELECT nombre, apellido, correo, telefono FROM usuarios WHERE id = ?");
+                // CORRECCIÓN: La tabla usuarios no tiene email ni teléfono, solo pedimos nombre y apellido
+                ps = conn.prepareStatement("SELECT nombre, apellido FROM usuarios WHERE id_usuario = ?");
                 ps.setInt(1, datos.getIdCliente());
                 ResultSet rsUsr = ps.executeQuery();
+
                 if(rsUsr.next()){
                     String n = rsUsr.getString("nombre");
                     String a = rsUsr.getString("apellido");
-                    String c = rsUsr.getString("correo");
-                    String t = rsUsr.getString("telefono");
 
-                    ps = conn.prepareStatement("INSERT INTO clientes (id_usuario, nombre, apellido, correo, telefono, fecha_registro) VALUES (?, ?, ?, ?, ?, CURRENT_DATE) RETURNING id_cliente");
+                    // Insertamos al cliente usando 'email' y valores por defecto para lo que falte
+                    ps = conn.prepareStatement("INSERT INTO clientes (id_usuario, nombre, apellido, email, telefono) VALUES (?, ?, ?, ?, ?) RETURNING id_cliente");
                     ps.setInt(1, datos.getIdCliente());
                     ps.setString(2, n != null ? n : "Alumno");
                     ps.setString(3, a != null ? a : "Nuevo");
-                    ps.setString(4, c);
-                    ps.setString(5, t);
+                    ps.setString(4, "sin_email_" + datos.getIdCliente() + "@gym.com");
+                    ps.setString(5, "0000000000");
+
                     ResultSet rsIns = ps.executeQuery();
                     if(rsIns.next()) realIdCliente = rsIns.getInt(1);
                     else return false;
@@ -276,7 +278,6 @@ public class EntrenadorDAO {
                     return false; // El usuario ni siquiera existe
                 }
             }
-
             // Desactivar rutinas viejas de este profe
             ps = conn.prepareStatement("UPDATE rutinas SET id_entrenador = NULL WHERE id_cliente = ? AND id_entrenador = ?");
             ps.setInt(1, realIdCliente);
