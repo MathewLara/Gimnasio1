@@ -254,7 +254,7 @@ public class EntrenadorDAO {
             if (rs.next()) {
                 realIdCliente = rs.getInt(1);
             } else {
-                ps = conn.prepareStatement("SELECT nombre, apellido, correo, telefono FROM usuarios WHERE id = ?");
+                ps = conn.prepareStatement("SELECT nombre, apellido, correo, telefono FROM usuarios WHERE id_usuario = ?");
                 ps.setInt(1, datos.getIdCliente());
                 ResultSet rsUsr = ps.executeQuery();
                 if(rsUsr.next()){
