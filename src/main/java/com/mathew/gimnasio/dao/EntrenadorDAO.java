@@ -16,14 +16,24 @@ public class EntrenadorDAO {
     // Así evitamos que la BD explote por reglas de "NOT NULL" o "Foreign Keys"
     // ==================================================
     private int obtenerIdPlantilla(Connection conn) throws Exception {
+        // 1. Buscamos si ya existe el cliente fantasma "Plantilla"
         PreparedStatement ps = conn.prepareStatement("SELECT id_cliente FROM clientes WHERE nombre = 'Plantilla' AND apellido = 'Sistema'");
         ResultSet rs = ps.executeQuery();
         if (rs.next()) return rs.getInt(1);
 
-        // CORRECCIÓN: Usamos 'email' (no correo) y quitamos 'fecha_registro'
-        ps = conn.prepareStatement("INSERT INTO clientes (nombre, apellido, email, telefono) VALUES ('Plantilla', 'Sistema', 'plantilla@sistema.com', '0000000000') RETURNING id_cliente");
+        // 2. Si no existe, CREAMOS EL USUARIO PRIMERO (Obligatorio por tu llave foránea)
+        // Usamos id_rol = 3 que en tu BD corresponde a 'Cliente'
+        ps = conn.prepareStatement("INSERT INTO usuarios (id_rol, usuario, contrasena, nombre, apellido, activo) VALUES (3, 'plantilla_sys', '12345', 'Plantilla', 'Sistema', false) RETURNING id_usuario");
+        rs = ps.executeQuery();
+        int idUsr = 0;
+        if (rs.next()) idUsr = rs.getInt(1);
+
+        // 3. AHORA SÍ, creamos el cliente usando el id_usuario real que acabamos de generar
+        ps = conn.prepareStatement("INSERT INTO clientes (id_usuario, nombre, apellido, email, telefono) VALUES (?, 'Plantilla', 'Sistema', 'plantilla@sistema.com', '0000000000') RETURNING id_cliente");
+        ps.setInt(1, idUsr);
         rs = ps.executeQuery();
         if (rs.next()) return rs.getInt(1);
+
         return 0;
     }
 
