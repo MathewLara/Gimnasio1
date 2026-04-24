@@ -21,7 +21,7 @@ public class EntrenadorDAO {
         if (rs.next()) return rs.getInt(1);
 
         // Si no existe el fantasma, lo creamos silenciosamente
-        ps = conn.prepareStatement("INSERT INTO clientes (nombre, apellido, fecha_registro) VALUES ('Plantilla', 'Sistema', CURRENT_DATE) RETURNING id_cliente");
+        ps = conn.prepareStatement("INSERT INTO clientes (nombre, apellido, correo, telefono, fecha_registro) VALUES ('Plantilla', 'Sistema', 'plantilla@sistema.com', '0000000000', CURRENT_DATE) RETURNING id_cliente");
         rs = ps.executeQuery();
         if (rs.next()) return rs.getInt(1);
         return 0;
@@ -254,7 +254,7 @@ public class EntrenadorDAO {
             if (rs.next()) {
                 realIdCliente = rs.getInt(1);
             } else {
-                ps = conn.prepareStatement("SELECT nombre, apellido, correo, telefono FROM usuarios WHERE id_usuario = ?");
+                ps = conn.prepareStatement("SELECT nombre, apellido, correo, telefono FROM usuarios WHERE id = ?");
                 ps.setInt(1, datos.getIdCliente());
                 ResultSet rsUsr = ps.executeQuery();
                 if(rsUsr.next()){
@@ -278,7 +278,7 @@ public class EntrenadorDAO {
             }
 
             // Desactivar rutinas viejas de este profe
-            ps = conn.prepareStatement("UPDATE rutinas SET activa = FALSE WHERE id_cliente = ? AND id_entrenador = ?");
+            ps = conn.prepareStatement("UPDATE rutinas SET id_entrenador = NULL WHERE id_cliente = ? AND id_entrenador = ?");
             ps.setInt(1, realIdCliente);
             ps.setInt(2, idEntrenador);
             ps.executeUpdate();
