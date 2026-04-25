@@ -1,15 +1,20 @@
 package com.mathew.gimnasio.modelos;
 
 /**
- * DTO (Data Transfer Object) para recibir los datos de pago desde el checkout.
+ * CLASE DTO DE PAGOS Y MEMBRESÍAS
+ * Objeto transaccional utilizado para capturar la intención de compra del cliente
+ * desde el módulo de Checkout o Punto de Venta. Encapsula los datos financieros
+ * básicos antes de enviarlos al VentaDAO para su validación y persistencia.
  */
 public class PagoMembresiaDTO {
-    private int idUsuario;
-    private int idMembresia;
-    private double monto;
-    private int dias;
+    private int idUsuario;     // ID del usuario que está realizando la compra
+    private int idMembresia;   // ID del plan seleccionado (ej. 1=Diario, 2=Mensual)
+    private double monto;      // Valor monetario a cobrar (Validado en backend para evitar fraudes en frontend)
+    private int dias;          // Cantidad de días de vigencia que otorga este pago
 
     // --- Getters y Setters ---
+    // Métodos de acceso encapsulado requeridos para la correcta serialización JSON
+
     public int getIdUsuario() { return idUsuario; }
     public void setIdUsuario(int idUsuario) { this.idUsuario = idUsuario; }
 

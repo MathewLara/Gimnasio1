@@ -2,17 +2,24 @@ package com.mathew.gimnasio.modelos;
 
 import java.io.Serializable;
 
+/**
+ * DTO DE SEGURIDAD: REQUEST DE VERIFICACIÓN
+ * Maneja el flujo de validación de doble paso (2FA / Verificación de Email).
+ * Captura el código OTP (One Time Password) que el usuario ingresa
+ * tras recibir el correo de confirmación.
+ */
 public class VerificacionRequest implements Serializable {
-    private int idUsuario; // Lo dejamos por compatibilidad, pero el importante es el email
-    private String email;  // <--- NUEVO CAMPO IMPORTANTE
-    private String codigo;
+    private int idUsuario; // (Legacy) Mantenido por compatibilidad
+    private String email;  // Clave de búsqueda principal para localizar la cuenta a verificar
+    private String codigo; // El token o PIN ingresado por el usuario
 
     public VerificacionRequest() {} // Constructor vacío obligatorio
+
+    // --- Getters y Setters ---
 
     public int getIdUsuario() { return idUsuario; }
     public void setIdUsuario(int idUsuario) { this.idUsuario = idUsuario; }
 
-    // --- Getters y Setters para Email ---
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
 

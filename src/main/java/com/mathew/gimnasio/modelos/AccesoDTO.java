@@ -1,14 +1,21 @@
 package com.mathew.gimnasio.modelos;
 
+/**
+ * CLASE DTO DE ACCESO (Data Transfer Object)
+ * Se utiliza para empaquetar y transferir la información relacionada con
+ * el registro de accesos (entradas y salidas) de los usuarios al sistema o al gimnasio físico.
+ */
 public class AccesoDTO {
-    private String usuario;
-    private String rol;
-    private String horaIngreso; // Renombramos para mayor claridad
-    private String horaSalida;  // <--- NUEVA VARIABLE
-    private String ip;
-    private String estado;
+    private String usuario;     // Nombre de usuario que realiza el acceso
+    private String rol;         // Rol del usuario en el sistema (ej. Administrador, Cliente)
+    private String horaIngreso; // Hora exacta en la que el usuario ingresó (Renombramos para mayor claridad)
+    private String horaSalida;  // Hora exacta en la que el usuario salió (<--- NUEVA VARIABLE)
+    private String ip;          // Dirección IP desde donde se realizó la conexión o escaneo
+    private String estado;      // Estado final del intento de acceso (ej. Exitoso, Denegado)
 
     // --- Getters y Setters Actualizados ---
+    // Métodos públicos que permiten leer y modificar los atributos privados de forma segura
+
     public String getUsuario() { return usuario; }
     public void setUsuario(String usuario) { this.usuario = usuario; }
 

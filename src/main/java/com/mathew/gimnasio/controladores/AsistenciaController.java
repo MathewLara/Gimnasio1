@@ -9,20 +9,21 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 
 /**
- * CONTROLADOR DE ASISTENCIAS
- * Este controlador gestiona el flujo de entradas y salidas de los clientes al gimnasio.
- * Se activa cuando un cliente escanea su código QR en la recepción.
+ * CONTROLADOR DE ASISTENCIAS (HARDWARE INTEGRATION)
+ * Este controlador gestiona el flujo de control de acceso físico al gimnasio.
+ * Es invocado de forma asíncrona cada vez que el componente Html5Qrcode
+ * lee un código válido en la recepción o en el kiosko.
  */
 @Path("/accesos")
 public class AsistenciaController {
 
     /**
-     * PROCESAR ACCESO (ENTRADA/SALIDA)
-     * Este metodo es el corazón del sistema de recepción.
-     * Funciona de forma inteligente: si el cliente no ha entrado hoy, marca ENTRADA.
-     * Si ya entró pero no ha salido, marca SALIDA.
-     * param idUsuario El ID que viene del código QR (id_usuario de la tabla usuarios)
-     * @return Una respuesta JSON con el saludo personalizado y el tipo de movimiento.
+     * PROCESAR ACCESO INTELIGENTE (TOGGLE ENTRADA/SALIDA)
+     * Este método contiene lógica de negocio transaccional: detecta automáticamente
+     * si el usuario está ingresando o abandonando las instalaciones.
+     * URL: POST /api/accesos/escanear/{idUsuario}
+     * * @param idUsuario El ID decodificado del código QR.
+     * @return Respuesta JSON con un mensaje dinámico renderizable en la UI.
      */
     @POST
     @Path("/escanear/{idUsuario}")
@@ -31,12 +32,12 @@ public class AsistenciaController {
         String mensaje = "";
         String tipo = "";
 
-        // Usamos Try-with-resources para asegurar que la conexión se cierre sola al terminar
+        // Patrón Try-with-resources: Garantiza el cierre de la conexión JDBC evitando fugas de memoria
         try (Connection conn = ConexionDB.getConnection()) {
 
-            /* 1. TRADUCCIÓN DE ID
-             * El código QR entrega el 'id_usuario', pero nuestra tabla de asistencias
-             * usa el 'id_cliente'. Primero buscamos quién es el cliente dueño de ese usuario.
+            /* 1. TRADUCCIÓN DE CLAVES FORÁNEAS (USER -> CLIENTE)
+             * El código QR entrega el 'id_usuario' de autenticación, pero el log de asistencia
+             * requiere el 'id_cliente' del negocio. Resolvemos la relación.
              */
             String sqlCliente = "SELECT id_cliente, nombre FROM clientes WHERE id_usuario = ?";
             PreparedStatement psCl = conn.prepareStatement(sqlCliente);
@@ -50,13 +51,12 @@ public class AsistenciaController {
                 idCliente = rsCl.getInt("id_cliente");
                 nombre = rsCl.getString("nombre");
             } else {
-                // Si el ID del QR no existe en la tabla de clientes, detenemos el proceso
+                // HTTP 404: Intercepta falsificaciones de QR o usuarios sin perfil de cliente
                 return Response.status(404).entity("{\"mensaje\": \"Usuario no encontrado en clientes\"}").build();
             }
 
-            /* 2. VERIFICAR ESTADO ACTUAL
-             * Buscamos si el cliente ya tiene una entrada registrada el día de hoy
-             * que todavía no tenga una hora de salida (fecha_hora_salida IS NULL).
+            /* 2. VERIFICAR ESTADO DE SESIÓN FÍSICA (TOGGLE LOGIC)
+             * Busca si existe un registro de entrada "abierto" (sin salida) para la fecha de HOY.
              */
             String sqlCheck = "SELECT id_asistencia FROM asistencias WHERE id_cliente = ? AND fecha_hora_salida IS NULL AND DATE(fecha_hora_ingreso) = CURRENT_DATE ORDER BY id_asistencia DESC LIMIT 1";
             PreparedStatement psCheck = conn.prepareStatement(sqlCheck);
@@ -64,9 +64,8 @@ public class AsistenciaController {
             ResultSet rs = psCheck.executeQuery();
 
             if (rs.next()) {
-                /* * CASO A: MARCAR SALIDA
-                 * Si encontramos un registro abierto, significa que el cliente está saliendo.
-                 * Actualizamos ese registro poniendo la hora actual en 'fecha_hora_salida'.
+                /* * CASO A: MARCAR SALIDA (CHECK-OUT)
+                 * Se encontró un registro abierto. Se actualiza inyectando el TIMESTAMP actual de PostgreSQL.
                  */
                 int idAsistencia = rs.getInt("id_asistencia");
                 String sqlSalida = "UPDATE asistencias SET fecha_hora_salida = CURRENT_TIMESTAMP WHERE id_asistencia = ?";
@@ -77,9 +76,8 @@ public class AsistenciaController {
                 mensaje = "👋 ¡Hasta luego, " + nombre + "!";
                 tipo = "SALIDA";
             } else {
-                /* * CASO B: MARCAR ENTRADA
-                 * Si no hay registros abiertos hoy, es un ingreso nuevo.
-                 * Insertamos una nueva fila con el ID del cliente y la hora actual.
+                /* * CASO B: MARCAR ENTRADA (CHECK-IN)
+                 * No hay registros abiertos hoy. Se inserta una nueva fila delegando la fecha/hora al motor DB.
                  */
                 String sqlEntrada = "INSERT INTO asistencias (id_cliente, fecha_hora_ingreso) VALUES (?, CURRENT_TIMESTAMP)";
                 PreparedStatement psIns = conn.prepareStatement(sqlEntrada);
@@ -90,13 +88,12 @@ public class AsistenciaController {
                 tipo = "ENTRADA";
             }
 
-            // Devolvemos el resultado al frontend en formato JSON
+            // 3. Serialización manual segura para enviar el feedback visual al escáner
             return Response.ok("{\"mensaje\": \"" + mensaje + "\", \"tipo\": \"" + tipo + "\"}").build();
 
         } catch (Exception e) {
-            // Si algo falla (ej. conexión a BD), registramos el error en la consola del servidor
-            e.printStackTrace();
-            return Response.status(500).entity("{\"mensaje\": \"Error interno\"}").build();
+            e.printStackTrace(); // Log del servidor para auditoría
+            return Response.status(500).entity("{\"mensaje\": \"Error interno\"}").build(); // HTTP 500
         }
     }
 }

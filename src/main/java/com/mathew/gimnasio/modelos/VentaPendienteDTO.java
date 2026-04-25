@@ -2,15 +2,22 @@ package com.mathew.gimnasio.modelos;
 
 import java.io.Serializable;
 
+/**
+ * DTO DE LOGÍSTICA: VENTA PENDIENTE
+ * Este objeto "aplana" la información de una factura para ser consumida
+ * por el panel del Recepcionista o Administrador. Solo muestra lo necesario
+ * para gestionar las entregas físicas de las compras web.
+ */
 public class VentaPendienteDTO implements Serializable {
-    private int idFactura;
-    private String numeroFactura;
-    private double totalPagado;
-    private String fechaEmision;
-    private String estadoEntrega;
-    private String nombreCliente;
+    private int idFactura;         // ID interno de la base de datos
+    private String numeroFactura;  // Código correlativo visual (ej. FAC-0001)
+    private double totalPagado;    // Monto final
+    private String fechaEmision;   // Fecha de la transacción
+    private String estadoEntrega;  // Workflow logístico (PENDIENTE / ENTREGADO)
+    private String nombreCliente;  // Nombre desnormalizado para evitar JOINs pesados en el Front
 
-    // Getters y Setters
+    // --- Getters y Setters ---
+
     public int getIdFactura() { return idFactura; }
     public void setIdFactura(int idFactura) { this.idFactura = idFactura; }
 
@@ -28,5 +35,4 @@ public class VentaPendienteDTO implements Serializable {
 
     public String getNombreCliente() { return nombreCliente; }
     public void setNombreCliente(String nombreCliente) { this.nombreCliente = nombreCliente; }
-
 }

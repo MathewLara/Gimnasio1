@@ -7,14 +7,30 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 
+/**
+ * DATA ACCESS OBJECT (DAO) DEL CLIENTE / SOCIO
+ * Esta clase es el motor detrás del "Dashboard del Cliente" y del "Kiosko".
+ * Su función principal es actuar como un Agregador (Aggregator Pattern),
+ * extrayendo información de múltiples tablas (clientes, membresías, asistencias, rutinas)
+ * para consolidarla en un solo viaje a la base de datos.
+ */
 public class ClienteDashboardDAO {
 
+    /**
+     * OBTENER TELEMETRÍA COMPLETA DEL SOCIO
+     * @param idUsuario ID de autenticación del usuario logueado.
+     * @return ResumenClienteDTO con el perfil, estado financiero, historial y rutina del día.
+     */
     public ResumenClienteDTO obtenerInfoDashboard(int idUsuario) {
         ResumenClienteDTO dto = new ResumenClienteDTO();
 
         try (Connection conn = ConexionDB.getConnection()) {
 
-            /* 1. PERFIL Y ESTADO DE MEMBRESÍA */
+            /* 1. PERFIL Y ESTADO DE MEMBRESÍA
+             * Cruce relacional (LEFT JOIN) para obtener los datos del cliente y su plan financiero.
+             * Utiliza lógica condicional en SQL (CASE WHEN) para evaluar si el plan está vencido
+             * basándose en la fecha del servidor (CURRENT_DATE).
+             */
             String sql = "SELECT c.id_cliente, c.nombre || ' ' || c.apellido as n, c.email, c.telefono, " +
                     "m.nombre as plan, m.precio, c.fecha_vencimiento, c.cancelado, " + // <--- AÑADE c.cancelado
                     "CASE WHEN c.fecha_vencimiento >= CURRENT_DATE THEN 'Activo' ELSE 'Vencido' END as estado " +
@@ -37,9 +53,13 @@ public class ClienteDashboardDAO {
                 dto.fechaVencimiento = rs.getString("fecha_vencimiento");
                 dto.estadoMembresia = rs.getString("estado");
                 dto.cancelado = rs.getBoolean("cancelado");
-            } else return null;
+            } else return null; // Aborta si el usuario no tiene un perfil de cliente asociado
 
-            /* 2. HISTORIAL DE ASISTENCIAS (AJUSTE HORA ECUADOR) */
+            /* 2. HISTORIAL DE ASISTENCIAS (AJUSTE HORA ECUADOR)
+             * Extrae los últimos 5 ingresos/salidas del cliente.
+             * Ajuste Arquitectónico: Se utiliza INTERVAL '5 hours' directamente en PostgreSQL
+             * para convertir la zona horaria (UTC a GMT-5) y asegurar que el frontend muestre la hora real.
+             */
             dto.historialAsistencias = new ArrayList<>();
             // Restamos 5 horas a la entrada y a la salida para que coincida con Ecuador
             String sqlAsist = "SELECT to_char(fecha_hora_ingreso - INTERVAL '5 hours', 'YYYY-MM-DD') as f, " +
@@ -59,6 +79,7 @@ public class ClienteDashboardDAO {
 
                 dto.historialAsistencias.add(new ResumenClienteDTO.AsistenciaSimple(fecha, horaIn, horaOut));
 
+                // Capturamos el registro más reciente para los KPIs superiores del Dashboard
                 if (primeraFila) {
                     dto.ultimoIngreso = horaIn;
                     dto.ultimaSalida = horaOut;
@@ -66,7 +87,9 @@ public class ClienteDashboardDAO {
                 }
             }
 
-            /* 3. RUTINA DEL DÍA (MANTENIENDO TU LÓGICA) */
+            /* 3. RUTINA DEL DÍA (MANTENIENDO TU LÓGICA)
+             * Busca la rutina asignada para el día actual y extrae sus ejercicios en una sub-consulta.
+             */
             dto.ejercicios = new ArrayList<>();
             String sqlRutina = "SELECT r.id_rutina, r.nombre_rutina, COALESCE(e.nombre, 'Staff') as ent " +
                     "FROM rutinas r " +
@@ -84,6 +107,7 @@ public class ClienteDashboardDAO {
                 dto.entrenador = rs.getString("ent");
                 int idR = rs.getInt("id_rutina");
 
+                // Sub-consulta para extraer los detalles (series y repeticiones)
                 PreparedStatement psEj = conn.prepareStatement("SELECT e.nombre_ejercicio, d.series || ' x ' || d.repeticiones as sr FROM detalle_rutinas d JOIN ejercicios e ON d.id_ejercicio = e.id_ejercicio WHERE d.id_rutina = ?");
                 psEj.setInt(1, idR);
                 ResultSet rsEj = psEj.executeQuery();
@@ -92,7 +116,9 @@ public class ClienteDashboardDAO {
                 }
             }
 
-            /* 4. VERIFICACIÓN DE RUTINA TERMINADA */
+            /* 4. VERIFICACIÓN DE RUTINA TERMINADA
+             * Consulta de existencia ultrarrápida. Retorna true si hay un log de entrenamiento hoy.
+             */
             String sqlCheck = "SELECT 1 FROM historial_entrenamientos WHERE id_cliente = ? AND fecha = CURRENT_DATE";
             ps = conn.prepareStatement(sqlCheck);
             ps.setInt(1, idCliente);
@@ -104,6 +130,11 @@ public class ClienteDashboardDAO {
     }
 
     /* MANTENIENDO TU FUNCIÓN DE REGISTRO DE TÉRMINO */
+    /**
+     * REGISTRAR ENTRENAMIENTO FINALIZADO
+     * Inserta un registro en el historial para gamificación y control del entrenador.
+     * Implementa protección anti-duplicados usando "WHERE NOT EXISTS" directamente en SQL.
+     */
     public boolean registrarTerminoRutina(int idUsuario) {
         try (Connection conn = ConexionDB.getConnection()) {
             String sqlInfo = "SELECT id_cliente, id_rutina FROM rutinas WHERE id_cliente = (SELECT id_cliente FROM clientes WHERE id_usuario = ?) ORDER BY id_rutina DESC LIMIT 1";
@@ -125,9 +156,15 @@ public class ClienteDashboardDAO {
         } catch (Exception e) { e.printStackTrace(); }
         return false;
     }
+
     // ==========================================
     // CANCELAR SUSCRIPCIÓN (CORREGIDO)
     // ==========================================
+    /**
+     * CANCELAR SUSCRIPCIÓN (SOFT DELETE / FLAG)
+     * No elimina al usuario, solo enciende una bandera (cancelado = TRUE)
+     * para cortar el acceso a los servicios físicos y lógicos.
+     */
     public boolean cancelarSuscripcion(int idUsuario) {
         // Ahora sí guardamos el estado de cancelación real
         String sql = "UPDATE clientes SET cancelado = TRUE WHERE id_usuario = ?";

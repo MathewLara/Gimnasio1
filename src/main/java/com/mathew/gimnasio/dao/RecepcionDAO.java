@@ -3,8 +3,20 @@ package com.mathew.gimnasio.dao;
 import com.mathew.gimnasio.configuracion.ConexionDB;
 import java.sql.*;
 
+/**
+ * DATA ACCESS OBJECT (DAO) DE RECEPCIÓN
+ * Actúa como el motor transaccional del "Front Desk".
+ * Gestiona el Punto de Venta (POS), la telemetría en vivo del aforo físico
+ * y la validación de control de acceso mediante códigos QR.
+ */
 public class RecepcionDAO {
 
+    /**
+     * OBTENER TELEMETRÍA DEL DASHBOARD (AFORO Y CAJA)
+     * Construye manualmente un JSON anidado. Consolida el flujo de caja diario,
+     * la cantidad de personas actualmente dentro de las instalaciones y un
+     * feed de actividad en tiempo real.
+     */
     // ==========================================
     // 1. CARGAR DASHBOARD (AFORO Y CAJA)
     // ==========================================
@@ -13,14 +25,14 @@ public class RecepcionDAO {
 
         try (Connection conn = ConexionDB.getConnection()) {
 
-            // 1. Ingresos en Caja
+            // 1. Ingresos en Caja (Uso de COALESCE para evitar NullPointerExceptions si no hay ventas hoy)
             double cajaHoy = 0.0;
             String sqlCaja = "SELECT COALESCE(SUM(monto_pagado), 0) FROM pagos WHERE DATE(fecha_pago) = CURRENT_DATE";
             try(PreparedStatement ps = conn.prepareStatement(sqlCaja); ResultSet rs = ps.executeQuery()) {
                 if(rs.next()) cajaHoy = rs.getDouble(1);
             }
 
-            // 2. Personas Entrenando (Aforo actual)
+            // 2. Personas Entrenando (Aforo actual en vivo: Entradas sin Salidas)
             int aforoHoy = 0;
             String sqlAforo = "SELECT COUNT(*) FROM asistencias WHERE DATE(fecha_hora_ingreso) = CURRENT_DATE AND fecha_hora_salida IS NULL";
             try(PreparedStatement ps = conn.prepareStatement(sqlAforo); ResultSet rs = ps.executeQuery()) {
@@ -32,7 +44,8 @@ public class RecepcionDAO {
                     .append("\"aforoHoy\": ").append(aforoHoy)
                     .append("},");
 
-            // 3. Actividad Reciente FÍSICA (SEPARANDO ENTRADAS Y SALIDAS CON UNION)
+            // 3. Actividad Reciente FÍSICA (SEPARANDO ENTRADAS Y SALIDAS CON UNION ALL)
+            // Arquitectura: Se fusionan dos consultas distintas en un solo flujo temporal ordenado
             json.append("\"actividadReciente\": [");
             String sqlActividad =
                     "SELECT u.usuario, a.fecha_hora_ingreso AS hora_movimiento, 'Entrada' AS tipo_movimiento " +
@@ -56,7 +69,7 @@ public class RecepcionDAO {
                     String horaMovimiento = rs.getString("hora_movimiento");
                     String tipoMovimiento = rs.getString("tipo_movimiento");
 
-                    // Extraemos solo la hora (ej. 14:30)
+                    // Truncamiento de cadena para extraer solo la hora en formato HH:mm
                     if(horaMovimiento != null && horaMovimiento.length() >= 16) {
                         horaMovimiento = horaMovimiento.substring(11, 16);
                     }
@@ -73,6 +86,7 @@ public class RecepcionDAO {
 
         } catch (Exception e) {
             System.out.println("Error en RecepcionDAO: " + e.getMessage());
+            // Fallback JSON para evitar que la interfaz de usuario colapse si falla la base de datos
             return "{\"kpis\": {\"cajaHoy\": 0, \"aforoHoy\": 0}, \"actividadReciente\": []}";
         }
 
@@ -80,6 +94,11 @@ public class RecepcionDAO {
         return json.toString();
     }
 
+    /**
+     * NÚCLEO DE CONTROL DE ACCESO (QR SCANNER)
+     * Procesa la entrada/salida validando la membresía, el estado de la cuenta
+     * y calculando dinámicamente si corresponde a un Check-In o Check-Out.
+     */
     // ==========================================
     // 2. PROCESAR EL ESCÁNER QR (ENTRADA / SALIDA)
     // ==========================================
@@ -94,12 +113,14 @@ public class RecepcionDAO {
             String paramLimpio = identificador.trim().toLowerCase();
             int idBuscado = -1;
 
+            // Decodificación de prefijos corporativos (Ej. códigos QR generados con la marca 'iron_')
             if (paramLimpio.startsWith("iron_")) {
                 try { idBuscado = Integer.parseInt(paramLimpio.substring(5)); } catch (Exception e) {}
             } else {
                 try { idBuscado = Integer.parseInt(paramLimpio); } catch (Exception e) {}
             }
 
+            // Búsqueda flexible multicampo (Permite escanear ID numérico, Username o Email)
             String sqlUser = "SELECT u.id_usuario, c.id_cliente, u.usuario, u.activo " +
                     "FROM usuarios u " +
                     "LEFT JOIN clientes c ON u.id_usuario = c.id_usuario " +
@@ -121,6 +142,7 @@ public class RecepcionDAO {
                 }
             }
 
+            // Capa de validación estricta de negocio (Barreras lógicas)
             if (idUsuario == -1) return "{\"status\":\"error\", \"mensaje\":\"Usuario no encontrado en la base de datos.\"}";
             if (!activo) return "{\"status\":\"error\", \"mensaje\":\"El usuario está inactivo. Verifique sus pagos.\"}";
             if (idCliente <= 0) return "{\"status\":\"error\", \"mensaje\":\"El usuario existe pero no está registrado como cliente.\"}";
@@ -134,21 +156,22 @@ public class RecepcionDAO {
             }
 
             if (idAsistencia != -1) {
-                // SALIDA
+                // FLUJO: SALIDA (El usuario ya estaba dentro)
                 String sqlOut = "UPDATE asistencias SET fecha_hora_salida = CURRENT_TIMESTAMP WHERE id_asistencia = ?";
                 try(PreparedStatement ps = conn.prepareStatement(sqlOut)) {
                     ps.setInt(1, idAsistencia);
                     ps.executeUpdate();
                 }
 
-                // OBTENEMOS LA HORA EXACTA DE ECUADOR PARA EL MENSAJE
+                // OBTENEMOS LA HORA EXACTA DE ECUADOR PARA EL MENSAJE (Capa de Aplicación en lugar de Motor BD)
                 java.time.ZonedDateTime ahoraEcuador = java.time.ZonedDateTime.now(java.time.ZoneId.of("America/Guayaquil"));
                 String horaFmt = ahoraEcuador.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
 
                 return "{\"status\":\"ok\", \"tipo\":\"Salida\", \"mensaje\":\"¡Hasta pronto, " + nombreUsuario + "! Salida a las " + horaFmt + "\"}";
             } else {
-                // ENTRADA
-                // TRUCO: Le agregamos los milisegundos al código para que PostgreSQL no bloquee por ser duplicado
+                // FLUJO: ENTRADA (Nuevo acceso del día)
+                // TRUCO ARQUITECTÓNICO: Le agregamos los milisegundos al código para evitar colisiones
+                // de restricciones UNIQUE en la base de datos en caso de escaneos dobles rápidos.
                 String codigoUnico = identificador.trim() + "_" + System.currentTimeMillis();
 
                 String sqlIn = "INSERT INTO asistencias (id_cliente, fecha_hora_ingreso, dispositivo_qr, codigo_validado) VALUES (?, CURRENT_TIMESTAMP, 'Escáner Recepción', ?)";
@@ -166,6 +189,7 @@ public class RecepcionDAO {
             }
 
         } catch (Exception e) {
+            // Saneamiento de la excepción para evitar romper la sintaxis JSON del frontend
             String errorMsg = e.getMessage();
             if(errorMsg != null) {
                 errorMsg = errorMsg.replace("\"", "'").replace("\n", " ");
@@ -176,6 +200,12 @@ public class RecepcionDAO {
             return "{\"status\":\"error\", \"mensaje\":\"Error BD: " + errorMsg + "\"}";
         }
     }
+
+    /**
+     * OBTENER DIRECTORIO EN VIVO DE SOCIOS
+     * Incluye una sub-consulta escalar para determinar si el cliente
+     * se encuentra físicamente dentro de las instalaciones en el momento exacto.
+     */
     // ==========================================
     // 3. OBTENER DIRECTORIO DE SOCIOS (CON ESTADO EN VIVO)
     // ==========================================
@@ -212,6 +242,11 @@ public class RecepcionDAO {
         json.append("]");
         return json.toString();
     }
+
+    /**
+     * OBTENER HISTORIAL DE VENTAS (CAJA CHICA)
+     * Devuelve el log de las transacciones procesadas recientemente en recepción.
+     */
     // ==========================================
     // 4. OBTENER HISTORIAL DE CAJA (PAGOS)
     // ==========================================
@@ -223,7 +258,7 @@ public class RecepcionDAO {
                 "FROM pagos p " +
                 "INNER JOIN clientes c ON p.id_cliente = c.id_cliente " +
                 "INNER JOIN usuarios u ON c.id_usuario = u.id_usuario " +
-                "ORDER BY p.fecha_pago DESC LIMIT 50";
+                "ORDER BY p.fecha_pago DESC LIMIT 50"; // Limitamos a 50 para evitar saturar el DOM
 
         try (Connection conn = ConexionDB.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql);
@@ -254,11 +289,15 @@ public class RecepcionDAO {
         return json.toString();
     }
 
+    /**
+     * PROCESAMIENTO DE PUNTO DE VENTA (POS)
+     * Resuelve de manera optimizada el ID interno del cliente a partir de su ID de usuario.
+     */
     // ==========================================
     // 5. REGISTRAR UN NUEVO PAGO
     // ==========================================
     public boolean registrarPago(int idUsuarioEnviado, int idPlan, double monto, String metodo) {
-        // CORREGIDO: Usamos id_membresia
+        // CORREGIDO: Usamos id_membresia. INSERT condicional embebido.
         String sql = "INSERT INTO pagos (id_cliente, id_membresia, monto_pagado, metodo_pago, fecha_pago) " +
                 "SELECT id_cliente, ?, ?, ?, CURRENT_TIMESTAMP " +
                 "FROM clientes WHERE id_usuario = ?";
