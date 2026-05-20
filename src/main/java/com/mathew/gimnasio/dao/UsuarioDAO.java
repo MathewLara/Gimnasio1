@@ -156,7 +156,6 @@ public class UsuarioDAO {
     // ==========================================
     // 4. LOGIN
     // ==========================================
-
     public Usuario login(String userOrEmail, String pass) {
         String sql = "SELECT u.*, c.email as email_cliente, e.email as email_entrenador " +
                 "FROM usuarios u " +
@@ -181,6 +180,9 @@ public class UsuarioDAO {
                     u.setIdRol(rs.getInt("id_rol"));
                     u.setUsuario(rs.getString("usuario"));
                     u.setActivo(rs.getBoolean("activo"));
+
+                    // NUEVO: CAPTURAMOS LA EMPRESA DEL USUARIO
+                    u.setIdEmpresa(rs.getInt("id_empresa"));
 
                     String email = rs.getString("email_cliente");
                     if (email == null) email = rs.getString("email_entrenador");

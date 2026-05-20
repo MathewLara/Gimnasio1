@@ -14,6 +14,7 @@ public class Usuario implements Serializable {
     // --- Credenciales y Control de Acceso ---
     private int idUsuario;           // Primary Key (Serial)
     private int idRol;               // Foreign Key hacia la tabla roles (Admin, Recep, etc.)
+    private int idEmpresa;
     private String usuario;          // Username único para login
     private String contrasena;       // Almacena el Hash BCrypt (NUNCA en texto plano)
     private Timestamp fechaCreacion; // Auditoría de creación
@@ -42,6 +43,9 @@ public class Usuario implements Serializable {
 
     public String getContrasena() { return contrasena; }
     public void setContrasena(String contrasena) { this.contrasena = contrasena; }
+
+    public int getIdEmpresa() { return idEmpresa; }
+    public void setIdEmpresa(int idEmpresa) { this.idEmpresa = idEmpresa; }
 
     public Timestamp getFechaCreacion() { return fechaCreacion; }
     public void setFechaCreacion(Timestamp fechaCreacion) { this.fechaCreacion = fechaCreacion; }
