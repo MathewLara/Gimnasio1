@@ -27,10 +27,16 @@ public class ProductoController {
      */
     @GET
     @Produces(MediaType.APPLICATION_JSON)
-    public Response listar() {
-        // Pedimos al almacenero (DAO) que nos traiga lo que hay en estanteria (Base de Datos)
-        List<Producto> productos = dao.listarProductos();
-        // Entregamos la lista con un código 200 (OK)
+    // <-- 1. Agregamos @QueryParam para atrapar el ID que viene en la URL
+    public Response listar(@QueryParam("idEmpresa") int idEmpresa) {
+
+        // Seguridad: Si alguien intenta entrar sin decir de qué empresa es, se bloquea
+        if (idEmpresa == 0) {
+            return Response.status(400).entity("{\"mensaje\": \"Falta el ID de la empresa.\"}").build();
+        }
+
+        // <-- 2. Le pasamos el ID al DAO
+        List<Producto> productos = dao.listarProductos(idEmpresa);
         return Response.ok(productos).build();
     }
 

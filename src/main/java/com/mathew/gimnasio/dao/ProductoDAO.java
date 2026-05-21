@@ -20,27 +20,32 @@ public class ProductoDAO {
      * Esto se hace así para que la base de datos responda rápido y no sature la memoria.
      * @return Una lista de objetos Producto con su información básica.
      */
-    public List<Producto> listarProductos() {
+    public List<Producto> listarProductos(int idEmpresa) { // <-- 1. Recibe el idEmpresa
         List<Producto> lista = new ArrayList<>();
-        // Seleccionamos solo las columnas de texto y números
-        String sql = "SELECT id_producto, nombre, descripcion, precio, tipo FROM productos ORDER BY id_producto ASC";
 
+        // <-- 2.WHERE id_empresa = ?
+        String sql = "SELECT id_producto, nombre, descripcion, precio, tipo FROM productos WHERE id_empresa = ? ORDER BY id_producto ASC";
+
+        // <-- 3. Cambiamos la estructura del try-with-resources para poder inyectar el parámetro
         try (Connection conn = ConexionDB.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
+             PreparedStatement ps = conn.prepareStatement(sql)) {
 
-            while (rs.next()) {
-                Producto p = new Producto();
-                p.setIdProducto(rs.getInt("id_producto"));
-                p.setNombre(rs.getString("nombre"));
-                p.setDescripcion(rs.getString("descripcion"));
-                p.setPrecio(rs.getDouble("precio"));
-                p.setTipo(rs.getString("tipo"));
-                lista.add(p);
+            ps.setInt(1, idEmpresa); // Inyectamos la empresa
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Producto p = new Producto();
+                    p.setIdProducto(rs.getInt("id_producto"));
+                    p.setNombre(rs.getString("nombre"));
+                    p.setDescripcion(rs.getString("descripcion"));
+                    p.setPrecio(rs.getDouble("precio"));
+                    p.setTipo(rs.getString("tipo"));
+                    lista.add(p);
+                }
             }
-        } catch (Exception e)
-        // Si hay un error en la consulta, lo mostramos en la consola del servidor
-        { e.printStackTrace(); }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
         return lista;
     }
