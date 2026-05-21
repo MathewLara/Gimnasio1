@@ -25,8 +25,12 @@ public class RecepcionController {
     @GET
     @Path("/dashboard")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response getDashboardRecepcion() {
-        String jsonRespuesta = dao.getDashboardRecepJSON();
+    public Response getDashboardRecepcion(@QueryParam("idEmpresa") int idEmpresa) {
+        if (idEmpresa == 0) {
+            return Response.status(400).entity("{\"mensaje\":\"Falta el ID de la empresa.\"}").build();
+        }
+        // Inyectamos el ID de la empresa al DAO
+        String jsonRespuesta = dao.getDashboardRecepJSON(idEmpresa);
         return Response.ok(jsonRespuesta).build();
     }
 
@@ -38,13 +42,13 @@ public class RecepcionController {
     @POST
     @Path("/acceso")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response registrarAcceso(@QueryParam("id") String identificador) {
+    public Response registrarAcceso(@QueryParam("id") String identificador, @QueryParam("idEmpresa") int idEmpresa) {
         // Validación de seguridad para evitar peticiones nulas o vacías
-        if (identificador == null || identificador.trim().isEmpty()) {
-            return Response.ok("{\"status\":\"error\", \"mensaje\":\"Por favor ingrese un código o usuario.\"}").build();
+        if (identificador == null || identificador.trim().isEmpty() || idEmpresa == 0) {
+            return Response.ok("{\"status\":\"error\", \"mensaje\":\"Por favor ingrese un código válido y asegure su sucursal.\"}").build();
         }
-        // Delega la lógica de Entrada/Salida al DAO
-        String resultado = dao.procesarAccesoQr(identificador);
+        // Delega la lógica de Entrada/Salida al DAO filtrando por gimnasio
+        String resultado = dao.procesarAccesoQr(identificador, idEmpresa);
         return Response.ok(resultado).build();
     }
 
@@ -55,8 +59,11 @@ public class RecepcionController {
     @GET
     @Path("/socios")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response getSociosRecepcion() {
-        String jsonRespuesta = dao.obtenerSociosRecepcionJSON();
+    public Response getSociosRecepcion(@QueryParam("idEmpresa") int idEmpresa) {
+        if (idEmpresa == 0) {
+            return Response.status(400).entity("{\"mensaje\":\"Falta el ID de la empresa.\"}").build();
+        }
+        String jsonRespuesta = dao.obtenerSociosRecepcionJSON(idEmpresa);
         return Response.ok(jsonRespuesta).build();
     }
 
@@ -67,8 +74,11 @@ public class RecepcionController {
     @GET
     @Path("/pagos")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response getHistorialPagos() {
-        String jsonRespuesta = dao.obtenerHistorialPagosJSON();
+    public Response getHistorialPagos(@QueryParam("idEmpresa") int idEmpresa) {
+        if (idEmpresa == 0) {
+            return Response.status(400).entity("{\"mensaje\":\"Falta el ID de la empresa.\"}").build();
+        }
+        String jsonRespuesta = dao.obtenerHistorialPagosJSON(idEmpresa);
         return Response.ok(jsonRespuesta).build();
     }
 
@@ -88,9 +98,11 @@ public class RecepcionController {
             int idPlan = Integer.parseInt(payload.get("idPlan").toString());
             double monto = Double.parseDouble(payload.get("monto").toString());
             String metodo = payload.get("metodo").toString();
+            // INYECCIÓN: Rescatamos para qué empresa es este dinero
+            int idEmpresa = Integer.parseInt(payload.get("idEmpresa").toString());
 
-            // Ejecución de la transacción en la base de datos
-            boolean exito = dao.registrarPago(idCliente, idPlan, monto, metodo);
+            // Ejecución de la transacción en la base de datos aislada
+            boolean exito = dao.registrarPago(idCliente, idPlan, monto, metodo, idEmpresa);
 
             // Respuesta HTTP basada en el resultado de la transacción
             if(exito) {

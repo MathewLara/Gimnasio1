@@ -18,25 +18,31 @@ public class RecepcionDAO {
      * feed de actividad en tiempo real.
      */
     // ==========================================
-    // 1. CARGAR DASHBOARD (AFORO Y CAJA)
+    // 1. CARGAR DASHBOARD (AFORO Y CAJA) AISLADO POR EMPRESA
     // ==========================================
-    public String getDashboardRecepJSON() {
+    public String getDashboardRecepJSON(int idEmpresa) {
         StringBuilder json = new StringBuilder("{");
 
         try (Connection conn = ConexionDB.getConnection()) {
 
-            // 1. Ingresos en Caja (Uso de COALESCE para evitar NullPointerExceptions si no hay ventas hoy)
+            // 1. Ingresos en Caja (Aislado)
             double cajaHoy = 0.0;
-            String sqlCaja = "SELECT COALESCE(SUM(monto_pagado), 0) FROM pagos WHERE DATE(fecha_pago) = CURRENT_DATE";
-            try(PreparedStatement ps = conn.prepareStatement(sqlCaja); ResultSet rs = ps.executeQuery()) {
-                if(rs.next()) cajaHoy = rs.getDouble(1);
+            String sqlCaja = "SELECT COALESCE(SUM(monto_pagado), 0) FROM pagos WHERE DATE(fecha_pago) = CURRENT_DATE AND id_empresa = ?";
+            try(PreparedStatement ps = conn.prepareStatement(sqlCaja)) {
+                ps.setInt(1, idEmpresa);
+                try(ResultSet rs = ps.executeQuery()) {
+                    if(rs.next()) cajaHoy = rs.getDouble(1);
+                }
             }
 
-            // 2. Personas Entrenando (Aforo actual en vivo: Entradas sin Salidas)
+            // 2. Personas Entrenando (Aforo actual en vivo: Aislado por la empresa del cliente)
             int aforoHoy = 0;
-            String sqlAforo = "SELECT COUNT(*) FROM asistencias WHERE DATE(fecha_hora_ingreso) = CURRENT_DATE AND fecha_hora_salida IS NULL";
-            try(PreparedStatement ps = conn.prepareStatement(sqlAforo); ResultSet rs = ps.executeQuery()) {
-                if(rs.next()) aforoHoy = rs.getInt(1);
+            String sqlAforo = "SELECT COUNT(*) FROM asistencias a INNER JOIN clientes c ON a.id_cliente = c.id_cliente WHERE DATE(a.fecha_hora_ingreso) = CURRENT_DATE AND a.fecha_hora_salida IS NULL AND c.id_empresa = ?";
+            try(PreparedStatement ps = conn.prepareStatement(sqlAforo)) {
+                ps.setInt(1, idEmpresa);
+                try(ResultSet rs = ps.executeQuery()) {
+                    if(rs.next()) aforoHoy = rs.getInt(1);
+                }
             }
 
             json.append("\"kpis\": {")
@@ -44,49 +50,50 @@ public class RecepcionDAO {
                     .append("\"aforoHoy\": ").append(aforoHoy)
                     .append("},");
 
-            // 3. Actividad Reciente FÍSICA (SEPARANDO ENTRADAS Y SALIDAS CON UNION ALL)
-            // Arquitectura: Se fusionan dos consultas distintas en un solo flujo temporal ordenado
+            // 3. Actividad Reciente FÍSICA (Aislada por empresa en ambas subconsultas)
             json.append("\"actividadReciente\": [");
             String sqlActividad =
                     "SELECT u.usuario, a.fecha_hora_ingreso AS hora_movimiento, 'Entrada' AS tipo_movimiento " +
                             "FROM asistencias a " +
                             "INNER JOIN clientes c ON a.id_cliente = c.id_cliente " +
                             "INNER JOIN usuarios u ON c.id_usuario = u.id_usuario " +
-                            "WHERE DATE(a.fecha_hora_ingreso) = CURRENT_DATE " +
+                            "WHERE DATE(a.fecha_hora_ingreso) = CURRENT_DATE AND u.id_empresa = ? " +
                             "UNION ALL " +
                             "SELECT u.usuario, a.fecha_hora_salida AS hora_movimiento, 'Salida' AS tipo_movimiento " +
                             "FROM asistencias a " +
                             "INNER JOIN clientes c ON a.id_cliente = c.id_cliente " +
                             "INNER JOIN usuarios u ON c.id_usuario = u.id_usuario " +
-                            "WHERE a.fecha_hora_salida IS NOT NULL AND DATE(a.fecha_hora_salida) = CURRENT_DATE " +
+                            "WHERE a.fecha_hora_salida IS NOT NULL AND DATE(a.fecha_hora_salida) = CURRENT_DATE AND u.id_empresa = ? " +
                             "ORDER BY hora_movimiento DESC LIMIT 5";
 
-            try(PreparedStatement ps = conn.prepareStatement(sqlActividad); ResultSet rs = ps.executeQuery()) {
-                boolean first = true;
-                while(rs.next()) {
-                    if(!first) json.append(",");
+            try(PreparedStatement ps = conn.prepareStatement(sqlActividad)) {
+                ps.setInt(1, idEmpresa);
+                ps.setInt(2, idEmpresa); // Se inyecta dos veces por el UNION ALL
+                try(ResultSet rs = ps.executeQuery()) {
+                    boolean first = true;
+                    while(rs.next()) {
+                        if(!first) json.append(",");
 
-                    String horaMovimiento = rs.getString("hora_movimiento");
-                    String tipoMovimiento = rs.getString("tipo_movimiento");
+                        String horaMovimiento = rs.getString("hora_movimiento");
+                        String tipoMovimiento = rs.getString("tipo_movimiento");
 
-                    // Truncamiento de cadena para extraer solo la hora en formato HH:mm
-                    if(horaMovimiento != null && horaMovimiento.length() >= 16) {
-                        horaMovimiento = horaMovimiento.substring(11, 16);
+                        if(horaMovimiento != null && horaMovimiento.length() >= 16) {
+                            horaMovimiento = horaMovimiento.substring(11, 16);
+                        }
+
+                        json.append("{")
+                                .append("\"hora\": \"").append(horaMovimiento).append("\",")
+                                .append("\"cliente\": \"").append(rs.getString("usuario")).append("\",")
+                                .append("\"tipo\": \"").append(tipoMovimiento).append("\"")
+                                .append("}");
+                        first = false;
                     }
-
-                    json.append("{")
-                            .append("\"hora\": \"").append(horaMovimiento).append("\",")
-                            .append("\"cliente\": \"").append(rs.getString("usuario")).append("\",")
-                            .append("\"tipo\": \"").append(tipoMovimiento).append("\"")
-                            .append("}");
-                    first = false;
                 }
             }
             json.append("]");
 
         } catch (Exception e) {
             System.out.println("Error en RecepcionDAO: " + e.getMessage());
-            // Fallback JSON para evitar que la interfaz de usuario colapse si falla la base de datos
             return "{\"kpis\": {\"cajaHoy\": 0, \"aforoHoy\": 0}, \"actividadReciente\": []}";
         }
 
@@ -95,14 +102,12 @@ public class RecepcionDAO {
     }
 
     /**
-     * NÚCLEO DE CONTROL DE ACCESO (QR SCANNER)
-     * Procesa la entrada/salida validando la membresía, el estado de la cuenta
-     * y calculando dinámicamente si corresponde a un Check-In o Check-Out.
+     * NÚCLEO DE CONTROL DE ACCESO (QR SCANNER) AISLADO
      */
     // ==========================================
     // 2. PROCESAR EL ESCÁNER QR (ENTRADA / SALIDA)
     // ==========================================
-    public String procesarAccesoQr(String identificador) {
+    public String procesarAccesoQr(String identificador, int idEmpresa) {
         try (Connection conn = ConexionDB.getConnection()) {
 
             int idUsuario = -1;
@@ -113,25 +118,25 @@ public class RecepcionDAO {
             String paramLimpio = identificador.trim().toLowerCase();
             int idBuscado = -1;
 
-            // Decodificación de prefijos corporativos (Ej. códigos QR generados con la marca 'iron_')
             if (paramLimpio.startsWith("iron_")) {
                 try { idBuscado = Integer.parseInt(paramLimpio.substring(5)); } catch (Exception e) {}
             } else {
                 try { idBuscado = Integer.parseInt(paramLimpio); } catch (Exception e) {}
             }
 
-            // Búsqueda flexible multicampo (Permite escanear ID numérico, Username o Email)
+            // Búsqueda flexible pero SECUTIRIZADA POR EMPRESA
             String sqlUser = "SELECT u.id_usuario, c.id_cliente, u.usuario, u.activo " +
                     "FROM usuarios u " +
                     "LEFT JOIN clientes c ON u.id_usuario = c.id_usuario " +
                     "LEFT JOIN entrenadores e ON u.id_usuario = e.id_usuario " +
-                    "WHERE LOWER(u.usuario) = ? OR LOWER(c.email) = ? OR LOWER(e.email) = ? OR u.id_usuario = ?";
+                    "WHERE (LOWER(u.usuario) = ? OR LOWER(c.email) = ? OR LOWER(e.email) = ? OR u.id_usuario = ?) AND u.id_empresa = ?";
 
             try(PreparedStatement ps = conn.prepareStatement(sqlUser)) {
                 ps.setString(1, paramLimpio);
                 ps.setString(2, paramLimpio);
                 ps.setString(3, paramLimpio);
                 ps.setInt(4, idBuscado);
+                ps.setInt(5, idEmpresa); // Filtro multi-tenant
 
                 ResultSet rs = ps.executeQuery();
                 if(rs.next()) {
@@ -142,8 +147,7 @@ public class RecepcionDAO {
                 }
             }
 
-            // Capa de validación estricta de negocio (Barreras lógicas)
-            if (idUsuario == -1) return "{\"status\":\"error\", \"mensaje\":\"Usuario no encontrado en la base de datos.\"}";
+            if (idUsuario == -1) return "{\"status\":\"error\", \"mensaje\":\"Usuario no encontrado en esta sucursal.\"}";
             if (!activo) return "{\"status\":\"error\", \"mensaje\":\"El usuario está inactivo. Verifique sus pagos.\"}";
             if (idCliente <= 0) return "{\"status\":\"error\", \"mensaje\":\"El usuario existe pero no está registrado como cliente.\"}";
 
@@ -156,32 +160,26 @@ public class RecepcionDAO {
             }
 
             if (idAsistencia != -1) {
-                // FLUJO: SALIDA (El usuario ya estaba dentro)
                 String sqlOut = "UPDATE asistencias SET fecha_hora_salida = CURRENT_TIMESTAMP WHERE id_asistencia = ?";
                 try(PreparedStatement ps = conn.prepareStatement(sqlOut)) {
                     ps.setInt(1, idAsistencia);
                     ps.executeUpdate();
                 }
 
-                // OBTENEMOS LA HORA EXACTA DE ECUADOR PARA EL MENSAJE (Capa de Aplicación en lugar de Motor BD)
                 java.time.ZonedDateTime ahoraEcuador = java.time.ZonedDateTime.now(java.time.ZoneId.of("America/Guayaquil"));
                 String horaFmt = ahoraEcuador.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
 
                 return "{\"status\":\"ok\", \"tipo\":\"Salida\", \"mensaje\":\"¡Hasta pronto, " + nombreUsuario + "! Salida a las " + horaFmt + "\"}";
             } else {
-                // FLUJO: ENTRADA (Nuevo acceso del día)
-                // TRUCO ARQUITECTÓNICO: Le agregamos los milisegundos al código para evitar colisiones
-                // de restricciones UNIQUE en la base de datos en caso de escaneos dobles rápidos.
                 String codigoUnico = identificador.trim() + "_" + System.currentTimeMillis();
 
                 String sqlIn = "INSERT INTO asistencias (id_cliente, fecha_hora_ingreso, dispositivo_qr, codigo_validado) VALUES (?, CURRENT_TIMESTAMP, 'Escáner Recepción', ?)";
                 try(PreparedStatement ps = conn.prepareStatement(sqlIn)) {
                     ps.setInt(1, idCliente);
-                    ps.setString(2, codigoUnico); // Ahora siempre será único
+                    ps.setString(2, codigoUnico);
                     ps.executeUpdate();
                 }
 
-                // OBTENEMOS LA HORA EXACTA DE ECUADOR PARA EL MENSAJE
                 java.time.ZonedDateTime ahoraEcuador = java.time.ZonedDateTime.now(java.time.ZoneId.of("America/Guayaquil"));
                 String horaFmt = ahoraEcuador.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
 
@@ -189,7 +187,6 @@ public class RecepcionDAO {
             }
 
         } catch (Exception e) {
-            // Saneamiento de la excepción para evitar romper la sintaxis JSON del frontend
             String errorMsg = e.getMessage();
             if(errorMsg != null) {
                 errorMsg = errorMsg.replace("\"", "'").replace("\n", " ");
@@ -202,41 +199,42 @@ public class RecepcionDAO {
     }
 
     /**
-     * OBTENER DIRECTORIO EN VIVO DE SOCIOS
-     * Incluye una sub-consulta escalar para determinar si el cliente
-     * se encuentra físicamente dentro de las instalaciones en el momento exacto.
+     * OBTENER DIRECTORIO EN VIVO DE SOCIOS AISLADO
      */
     // ==========================================
     // 3. OBTENER DIRECTORIO DE SOCIOS (CON ESTADO EN VIVO)
     // ==========================================
-    public String obtenerSociosRecepcionJSON() {
+    public String obtenerSociosRecepcionJSON(int idEmpresa) {
         StringBuilder json = new StringBuilder("[");
-        // Consulta avanzada: Busca a los clientes y cuenta si están adentro del gimnasio HOY
         String sql = "SELECT u.id_usuario, u.usuario, u.nombre, u.apellido, u.activo, " +
                 "c.email, c.telefono, " +
                 "(SELECT COUNT(*) FROM asistencias a WHERE a.id_cliente = c.id_cliente AND DATE(a.fecha_hora_ingreso) = CURRENT_DATE AND a.fecha_hora_salida IS NULL) as esta_entrenando " +
                 "FROM usuarios u " +
                 "INNER JOIN clientes c ON u.id_usuario = c.id_usuario " +
-                "WHERE u.id_rol = 4 " +
+                "WHERE u.id_rol = 4 AND u.id_empresa = ? " +
                 "ORDER BY u.id_usuario DESC";
 
         try (Connection conn = ConexionDB.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-            boolean first = true;
-            while (rs.next()) {
-                if (!first) json.append(",");
-                json.append("{")
-                        .append("\"id\":").append(rs.getInt("id_usuario")).append(",")
-                        .append("\"usuario\":\"").append(rs.getString("usuario")).append("\",")
-                        .append("\"nombre\":\"").append(rs.getString("nombre") != null ? rs.getString("nombre") : "").append("\",")
-                        .append("\"apellido\":\"").append(rs.getString("apellido") != null ? rs.getString("apellido") : "").append("\",")
-                        .append("\"activo\":").append(rs.getBoolean("activo")).append(",")
-                        .append("\"email\":\"").append(rs.getString("email") != null ? rs.getString("email") : "").append("\",")
-                        .append("\"telefono\":\"").append(rs.getString("telefono") != null ? rs.getString("telefono") : "").append("\",")
-                        .append("\"esta_entrenando\":").append(rs.getInt("esta_entrenando"))
-                        .append("}");
-                first = false;
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, idEmpresa); // Filtramos por empresa
+
+            try (ResultSet rs = ps.executeQuery()) {
+                boolean first = true;
+                while (rs.next()) {
+                    if (!first) json.append(",");
+                    json.append("{")
+                            .append("\"id\":").append(rs.getInt("id_usuario")).append(",")
+                            .append("\"usuario\":\"").append(rs.getString("usuario")).append("\",")
+                            .append("\"nombre\":\"").append(rs.getString("nombre") != null ? rs.getString("nombre") : "").append("\",")
+                            .append("\"apellido\":\"").append(rs.getString("apellido") != null ? rs.getString("apellido") : "").append("\",")
+                            .append("\"activo\":").append(rs.getBoolean("activo")).append(",")
+                            .append("\"email\":\"").append(rs.getString("email") != null ? rs.getString("email") : "").append("\",")
+                            .append("\"telefono\":\"").append(rs.getString("telefono") != null ? rs.getString("telefono") : "").append("\",")
+                            .append("\"esta_entrenando\":").append(rs.getInt("esta_entrenando"))
+                            .append("}");
+                    first = false;
+                }
             }
         } catch (Exception e) { e.printStackTrace(); }
         json.append("]");
@@ -244,43 +242,46 @@ public class RecepcionDAO {
     }
 
     /**
-     * OBTENER HISTORIAL DE VENTAS (CAJA CHICA)
-     * Devuelve el log de las transacciones procesadas recientemente en recepción.
+     * OBTENER HISTORIAL DE VENTAS (CAJA CHICA) AISLADO
      */
     // ==========================================
     // 4. OBTENER HISTORIAL DE CAJA (PAGOS)
     // ==========================================
-    public String obtenerHistorialPagosJSON() {
+    public String obtenerHistorialPagosJSON(int idEmpresa) {
         StringBuilder json = new StringBuilder("[");
 
-        // CORREGIDO: Usamos id_membresia y p.id_cliente que acabamos de crear
         String sql = "SELECT p.id_pago, u.usuario, p.monto_pagado, p.fecha_pago, p.metodo_pago, p.id_membresia " +
                 "FROM pagos p " +
                 "INNER JOIN clientes c ON p.id_cliente = c.id_cliente " +
                 "INNER JOIN usuarios u ON c.id_usuario = u.id_usuario " +
-                "ORDER BY p.fecha_pago DESC LIMIT 50"; // Limitamos a 50 para evitar saturar el DOM
+                "WHERE p.id_empresa = ? " +
+                "ORDER BY p.fecha_pago DESC LIMIT 50";
 
         try (Connection conn = ConexionDB.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-            boolean first = true;
-            while(rs.next()) {
-                if(!first) json.append(",");
+             PreparedStatement ps = conn.prepareStatement(sql)) {
 
-                String fechaLimpia = rs.getString("fecha_pago");
-                if(fechaLimpia != null && fechaLimpia.length() > 19) {
-                    fechaLimpia = fechaLimpia.substring(0, 19);
+            ps.setInt(1, idEmpresa); // Filtramos los cobros por gimnasio
+
+            try (ResultSet rs = ps.executeQuery()) {
+                boolean first = true;
+                while(rs.next()) {
+                    if(!first) json.append(",");
+
+                    String fechaLimpia = rs.getString("fecha_pago");
+                    if(fechaLimpia != null && fechaLimpia.length() > 19) {
+                        fechaLimpia = fechaLimpia.substring(0, 19);
+                    }
+
+                    json.append("{")
+                            .append("\"id_pago\":").append(rs.getInt("id_pago")).append(",")
+                            .append("\"socio\":\"").append(rs.getString("usuario")).append("\",")
+                            .append("\"monto\":").append(rs.getDouble("monto_pagado")).append(",")
+                            .append("\"fecha\":\"").append(fechaLimpia).append("\",")
+                            .append("\"metodo\":\"").append(rs.getString("metodo_pago")).append("\",")
+                            .append("\"id_plan\":").append(rs.getInt("id_membresia"))
+                            .append("}");
+                    first = false;
                 }
-
-                json.append("{")
-                        .append("\"id_pago\":").append(rs.getInt("id_pago")).append(",")
-                        .append("\"socio\":\"").append(rs.getString("usuario")).append("\",")
-                        .append("\"monto\":").append(rs.getDouble("monto_pagado")).append(",")
-                        .append("\"fecha\":\"").append(fechaLimpia).append("\",")
-                        .append("\"metodo\":\"").append(rs.getString("metodo_pago")).append("\",")
-                        .append("\"id_plan\":").append(rs.getInt("id_membresia")) // <--- CORREGIDO
-                        .append("}");
-                first = false;
             }
         } catch (Exception e) {
             System.out.println("Error Historial Pagos: " + e.getMessage());
@@ -290,16 +291,14 @@ public class RecepcionDAO {
     }
 
     /**
-     * PROCESAMIENTO DE PUNTO DE VENTA (POS)
-     * Resuelve de manera optimizada el ID interno del cliente a partir de su ID de usuario.
+     * PROCESAMIENTO DE PUNTO DE VENTA (POS) AISLADO
      */
     // ==========================================
     // 5. REGISTRAR UN NUEVO PAGO
     // ==========================================
-    public boolean registrarPago(int idUsuarioEnviado, int idPlan, double monto, String metodo) {
-        // CORREGIDO: Usamos id_membresia. INSERT condicional embebido.
-        String sql = "INSERT INTO pagos (id_cliente, id_membresia, monto_pagado, metodo_pago, fecha_pago) " +
-                "SELECT id_cliente, ?, ?, ?, CURRENT_TIMESTAMP " +
+    public boolean registrarPago(int idUsuarioEnviado, int idPlan, double monto, String metodo, int idEmpresa) {
+        String sql = "INSERT INTO pagos (id_cliente, id_membresia, monto_pagado, metodo_pago, fecha_pago, id_empresa) " +
+                "SELECT id_cliente, ?, ?, ?, CURRENT_TIMESTAMP, ? " +
                 "FROM clientes WHERE id_usuario = ?";
 
         try (Connection conn = ConexionDB.getConnection();
@@ -308,7 +307,8 @@ public class RecepcionDAO {
             ps.setInt(1, idPlan);
             ps.setDouble(2, monto);
             ps.setString(3, metodo);
-            ps.setInt(4, idUsuarioEnviado);
+            ps.setInt(4, idEmpresa); // Registramos a qué empresa va el dinero
+            ps.setInt(5, idUsuarioEnviado);
 
             return ps.executeUpdate() > 0;
 
