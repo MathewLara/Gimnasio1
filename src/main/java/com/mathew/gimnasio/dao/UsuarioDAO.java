@@ -224,8 +224,11 @@ public class UsuarioDAO {
     // GESTIÓN DE USUARIOS (PANEL ADMIN)
     // ==========================================
 
-    public String obtenerUsuariosParaAdminJSON() {
+    // 1. Añadimos el parámetro idEmpresa
+    public String obtenerUsuariosParaAdminJSON(int idEmpresa) {
         StringBuilder json = new StringBuilder("[");
+
+        // 2. Añadimos el filtro WHERE u.id_empresa = ? antes del ORDER BY
         String sql = "SELECT u.id_usuario, u.usuario, u.nombre, u.apellido, u.activo, r.nombre_rol, " +
                 "COALESCE(c.email, e.email) as email, " +
                 "c.telefono as telefono " +
@@ -233,27 +236,35 @@ public class UsuarioDAO {
                 "INNER JOIN roles r ON u.id_rol = r.id_rol " +
                 "LEFT JOIN clientes c ON u.id_usuario = c.id_usuario " +
                 "LEFT JOIN entrenadores e ON u.id_usuario = e.id_usuario " +
+                "WHERE u.id_empresa = ? " + // <-- AQUÍ ESTÁ LA MAGIA DEL AISLAMIENTO
                 "ORDER BY u.id_rol ASC, u.id_usuario DESC";
 
+        // 3. Modificamos el bloque try para poder inyectar el parámetro
         try (Connection conn = ConexionDB.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-            boolean first = true;
-            while (rs.next()) {
-                if (!first) json.append(",");
-                json.append("{")
-                        .append("\"id\":").append(rs.getInt("id_usuario")).append(",")
-                        .append("\"usuario\":\"").append(rs.getString("usuario")).append("\",")
-                        .append("\"nombre\":\"").append(rs.getString("nombre") != null ? rs.getString("nombre") : "").append("\",")
-                        .append("\"apellido\":\"").append(rs.getString("apellido") != null ? rs.getString("apellido") : "").append("\",")
-                        .append("\"rol\":\"").append(rs.getString("nombre_rol")).append("\",")
-                        .append("\"activo\":").append(rs.getBoolean("activo")).append(",")
-                        .append("\"email\":\"").append(rs.getString("email") != null ? rs.getString("email") : "").append("\",")
-                        .append("\"telefono\":\"").append(rs.getString("telefono") != null ? rs.getString("telefono") : "").append("\"")
-                        .append("}");
-                first = false;
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, idEmpresa); // Inyectamos el ID de la empresa
+
+            try (ResultSet rs = ps.executeQuery()) {
+                boolean first = true;
+                while (rs.next()) {
+                    if (!first) json.append(",");
+                    json.append("{")
+                            .append("\"id\":").append(rs.getInt("id_usuario")).append(",")
+                            .append("\"usuario\":\"").append(rs.getString("usuario")).append("\",")
+                            .append("\"nombre\":\"").append(rs.getString("nombre") != null ? rs.getString("nombre") : "").append("\",")
+                            .append("\"apellido\":\"").append(rs.getString("apellido") != null ? rs.getString("apellido") : "").append("\",")
+                            .append("\"rol\":\"").append(rs.getString("nombre_rol")).append("\",")
+                            .append("\"activo\":").append(rs.getBoolean("activo")).append(",")
+                            .append("\"email\":\"").append(rs.getString("email") != null ? rs.getString("email") : "").append("\",")
+                            .append("\"telefono\":\"").append(rs.getString("telefono") != null ? rs.getString("telefono") : "").append("\"")
+                            .append("}");
+                    first = false;
+                }
             }
-        } catch (Exception e) { e.printStackTrace(); }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         json.append("]");
         return json.toString();
     }

@@ -244,13 +244,20 @@ public class AuthController {
     }
 
     /**
-     * ENDPOINT: LISTAR TODOS LOS USUARIOS
+     * ENDPOINT: LISTAR TODOS LOS USUARIOS (AISLADO POR EMPRESA)
      */
     @GET
     @Path("/admin/usuarios")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response getUsuariosAdmin() {
-        return Response.ok(dao.obtenerUsuariosParaAdminJSON()).build();
+    public Response getUsuariosAdmin(@QueryParam("idEmpresa") int idEmpresa) { // <-- Atrapamos el ID
+
+        // Bloqueo de seguridad: si no mandan la empresa, devolvemos un error 400
+        if (idEmpresa == 0) {
+            return Response.status(400).entity("{\"mensaje\": \"Falta el ID de la empresa en la petición.\"}").build();
+        }
+
+        // Le pasamos el ID al DAO
+        return Response.ok(dao.obtenerUsuariosParaAdminJSON(idEmpresa)).build();
     }
 
     /**
