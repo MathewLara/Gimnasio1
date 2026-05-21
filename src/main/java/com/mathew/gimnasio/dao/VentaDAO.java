@@ -154,39 +154,37 @@ public class VentaDAO {
     // GESTIÓN DE PEDIDOS PARA EL ADMINISTRADOR
     // ==========================================
 
-    // 1. Obtener todas las facturas (Pendientes y Entregadas)
-    public java.util.List<com.mathew.gimnasio.modelos.VentaPendienteDTO> obtenerVentasPendientes() {
+    // 1. Obtener todas las facturas (Pendientes y Entregadas) AISLADAS POR EMPRESA
+    public java.util.List<com.mathew.gimnasio.modelos.VentaPendienteDTO> obtenerVentasPendientes(int idEmpresa) {
         java.util.List<com.mathew.gimnasio.modelos.VentaPendienteDTO> lista = new java.util.ArrayList<>();
 
-        // MODIFICACIÓN SQL:
-        // - Usamos COALESCE para que si el apellido es nulo, no arruine el nombre.
-        // - Traemos f.estado_entrega.
-        // - Quitamos el WHERE y ponemos ORDER BY para ver los recientes primero.
-        // Busca esta parte en tu VentaDAO.java y reemplázala
         String sql = "SELECT f.id_factura, f.numero_factura, f.total_pagado, f.fecha_emision, f.estado_entrega, " +
                 "COALESCE(c.nombre, 'Cliente') || ' ' || COALESCE(c.apellido, 'Web') as nombre_cliente " +
                 "FROM factura_encabezados f " +
-                "LEFT JOIN clientes c ON f.id_usuario = c.id_usuario " + // <-- Unimos con la tabla clientes
+                "LEFT JOIN clientes c ON f.id_usuario = c.id_usuario " +
+                "WHERE f.id_empresa = ? " + // <-- EL FILTRO MULTI-EMPRESA
                 "ORDER BY f.fecha_emision DESC";
 
         try (Connection conn = ConexionDB.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
+             PreparedStatement ps = conn.prepareStatement(sql)) {
 
-            while (rs.next()) {
-                com.mathew.gimnasio.modelos.VentaPendienteDTO v = new com.mathew.gimnasio.modelos.VentaPendienteDTO();
-                v.setIdFactura(rs.getInt("id_factura"));
-                v.setNumeroFactura(rs.getString("numero_factura"));
-                v.setTotalPagado(rs.getDouble("total_pagado"));
-                v.setFechaEmision(rs.getString("fecha_emision"));
-                v.setNombreCliente(rs.getString("nombre_cliente"));
+            ps.setInt(1, idEmpresa); // Inyectamos la empresa
 
-                // NUEVO: Extraemos el estado de la base de datos y lo metemos en el DTO
-                v.setEstadoEntrega(rs.getString("estado_entrega"));
-
-                lista.add(v);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    com.mathew.gimnasio.modelos.VentaPendienteDTO v = new com.mathew.gimnasio.modelos.VentaPendienteDTO();
+                    v.setIdFactura(rs.getInt("id_factura"));
+                    v.setNumeroFactura(rs.getString("numero_factura"));
+                    v.setTotalPagado(rs.getDouble("total_pagado"));
+                    v.setFechaEmision(rs.getString("fecha_emision"));
+                    v.setNombreCliente(rs.getString("nombre_cliente"));
+                    v.setEstadoEntrega(rs.getString("estado_entrega"));
+                    lista.add(v);
+                }
             }
-        } catch (Exception e) { e.printStackTrace(); }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         return lista;
     }
 

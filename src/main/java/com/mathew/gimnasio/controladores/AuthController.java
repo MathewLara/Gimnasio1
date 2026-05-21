@@ -64,7 +64,6 @@ public class AuthController {
         }
 
         // 3. Validar Teléfono (al menos 9 dígitos)
-        // Nota: En Ecuador los celulares tienen 10 (ej: 099...) y fijos 9 (ej: 022...). Aceptamos desde 9.
         if (u.getTelefono() == null || !u.getTelefono().matches("\\d{9,}")) {
             return error("El teléfono debe tener por lo menos 9 dígitos numéricos.");
         }
@@ -80,7 +79,6 @@ public class AuthController {
         }
 
         // 4. VALIDACIÓN ESTRICTA DE FECHA (EDAD)
-        // Nos aseguramos de que el cliente tenga al menos 12 años y no ponga fechas irreales.
         if (u.getFechaNacimiento() == null || u.getFechaNacimiento().isEmpty()) {
             return error("La fecha de nacimiento es obligatoria.");
         }
@@ -119,19 +117,13 @@ public class AuthController {
         //  AQUÍ ESTÁ EL CAMBIO CLAVE (TRANSACCIÓN)
         // ==========================================
 
-        // Asignamos el rol 4 (Cliente) por defecto si no viene ninguno especificado
         if (u.getIdRol() == 0) u.setIdRol(4);
 
-        // PASO A: Generamos el código AQUÍ (antes de llamar a la base de datos)
-        // Será un código de 6 números aleatorios para validar el correo
         String codigoGenerado = String.format("%06d", new Random().nextInt(999999));
 
-        // PASO B: Se lo pasamos al DAO junto con el usuario
-        // El DAO guardará ambas cosas al mismo tiempo. Si falla uno, falla todo.
         boolean registrado = dao.registrarNuevoUsuario(u, codigoGenerado);
 
         if (registrado) {
-            // PASO C: Si la BD dijo "OK", enviamos el correo usando nuestro servicio
             new EmailService().enviarCodigo(u.getEmail(), codigoGenerado);
 
             return Response.ok("{"
@@ -139,17 +131,12 @@ public class AuthController {
                     + "\"idUsuario\": " + u.getIdUsuario()
                     + "}").build();
         } else {
-            // Si retorna false, usualmente es porque violó alguna restricción UNIQUE (como email o cédula repetida)
             return Response.status(409).entity("{\"mensaje\": \"El usuario o correo ya existen.\"}").build();
         }
     }
 
-    // --- Mismos métodos de siempre para verificar y login ---
-
     /**
      * VERIFICACIÓN DE CUENTA POR CÓDIGO
-     * Compara el código que el usuario ingresó en la web con el que enviamos a su correo.
-     * @param request Objeto que contiene el email y el código tipeado.
      */
     @POST
     @Path("/verificar")
@@ -158,7 +145,6 @@ public class AuthController {
     public Response verificarCuenta(VerificacionRequest request) {
         if (request.getEmail() == null || request.getCodigo() == null) return error("Faltan datos.");
 
-        // Aquí usamos la validación por Email que ya tienes en el DAO
         if (dao.validarCodigoPorEmail(request.getEmail(), request.getCodigo())) {
             return Response.ok("{\"mensaje\": \"Cuenta verificada.\"}").build();
         }
@@ -167,8 +153,6 @@ public class AuthController {
 
     /**
      * INICIO DE SESIÓN
-     * Verifica credenciales y el estado activo de la cuenta.
-     * @param credenciales Objeto con el usuario y la contraseña.
      */
     @POST
     @Path("/login")
@@ -176,25 +160,19 @@ public class AuthController {
     @Produces(MediaType.APPLICATION_JSON)
     public Response login(Credenciales credenciales, @Context HttpServletRequest request) {
 
-        // 1. CAPTURAR LA IP DEL NAVEGADOR (Funciona en Render y en Local)
         String ipReal = request.getHeader("X-Forwarded-For");
         if (ipReal == null || ipReal.isEmpty()) {
             ipReal = request.getRemoteAddr();
         }
 
-        // BLINDAJE PARA RENDER: Recortamos la IP si es mayor a 48 caracteres
-        // para que no rompa el VARCHAR(50) de tu base de datos.
         if (ipReal != null && ipReal.length() > 48) {
             ipReal = ipReal.substring(0, 48);
         }
 
-        // 2. VALIDACIÓN NORMAL DE TU SISTEMA
         Usuario usuario = dao.login(credenciales.getUsuario(), credenciales.getContrasena());
 
         if (usuario != null) {
-            // ¡LOGIN EXITOSO! Guardamos la IP en la base de datos
             dao.registrarLogAcceso(usuario.getIdUsuario(), ipReal, "Exitoso");
-
             return Response.ok(usuario).build();
         } else {
             return Response.status(401).entity("{\"mensaje\":\"Credenciales incorrectas\"}").build();
@@ -232,14 +210,16 @@ public class AuthController {
 
     /**
      * ENDPOINT PARA EL DASHBOARD DEL ADMINISTRADOR
-     * Devuelve las métricas reales de la base de datos.
+     * Devuelve las métricas reales de la base de datos aisladas por empresa.
      */
     @GET
     @Path("/admin/dashboard")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response getAdminDashboard() {
-        // Llamamos a la función que acabamos de crear en el DAO
-        String jsonReal = dao.getAdminStatsJSON();
+    public Response getAdminDashboard(@QueryParam("idEmpresa") int idEmpresa) {
+        if (idEmpresa == 0) {
+            return Response.status(400).entity("{\"mensaje\": \"Falta el ID de la empresa en la petición.\"}").build();
+        }
+        String jsonReal = dao.getAdminStatsJSON(idEmpresa);
         return Response.ok(jsonReal).build();
     }
 
@@ -249,14 +229,10 @@ public class AuthController {
     @GET
     @Path("/admin/usuarios")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response getUsuariosAdmin(@QueryParam("idEmpresa") int idEmpresa) { // <-- Atrapamos el ID
-
-        // Bloqueo de seguridad: si no mandan la empresa, devolvemos un error 400
+    public Response getUsuariosAdmin(@QueryParam("idEmpresa") int idEmpresa) {
         if (idEmpresa == 0) {
             return Response.status(400).entity("{\"mensaje\": \"Falta el ID de la empresa en la petición.\"}").build();
         }
-
-        // Le pasamos el ID al DAO
         return Response.ok(dao.obtenerUsuariosParaAdminJSON(idEmpresa)).build();
     }
 
@@ -271,25 +247,33 @@ public class AuthController {
         if (exito) return Response.ok("{\"mensaje\": \"Estado actualizado correctamente\"}").build();
         return Response.status(400).entity("{\"mensaje\": \"Error al actualizar\"}").build();
     }
+
     /**
      * ENDPOINT PARA REPORTES GERENCIALES
-     * Devuelve las métricas, ingresos y datos para los gráficos del dashboard.
+     * Devuelve las métricas, ingresos y datos para los gráficos del dashboard filtrados por empresa.
      */
     @GET
     @Path("/admin/reportes")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response getReportesAdmin() {
-        String jsonReportes = dao.getReportesJSON();
+    public Response getReportesAdmin(@QueryParam("idEmpresa") int idEmpresa) {
+        if (idEmpresa == 0) {
+            return Response.status(400).entity("{\"mensaje\": \"Falta el ID de la empresa en la petición.\"}").build();
+        }
+        String jsonReportes = dao.getReportesJSON(idEmpresa);
         return Response.ok(jsonReportes).build();
     }
+
     /**
      * RF09: DESCARGAR REPORTE DE ACCESOS EN CSV
      */
     @GET
     @Path("/admin/reportes/accesos/csv")
     @Produces("text/csv")
-    public Response descargarAccesosCSV() {
-        String csv = dao.getLogsAccesoCSV();
+    public Response descargarAccesosCSV(@QueryParam("idEmpresa") int idEmpresa) {
+        if (idEmpresa == 0) {
+            return Response.status(400).entity("{\"mensaje\": \"Falta el ID de la empresa en la petición.\"}").build();
+        }
+        String csv = dao.getLogsAccesoCSV(idEmpresa);
         return Response.ok(csv)
                 .header("Content-Disposition", "attachment; filename=\"reporte_auditoria_accesos.csv\"")
                 .build();
@@ -301,8 +285,11 @@ public class AuthController {
     @GET
     @Path("/admin/reportes/ingresos/csv")
     @Produces("text/csv")
-    public Response descargarIngresosCSV() {
-        String csv = dao.getReporteIngresosCSV();
+    public Response descargarIngresosCSV(@QueryParam("idEmpresa") int idEmpresa) {
+        if (idEmpresa == 0) {
+            return Response.status(400).entity("{\"mensaje\": \"Falta el ID de la empresa en la petición.\"}").build();
+        }
+        String csv = dao.getReporteIngresosCSV(idEmpresa);
         return Response.ok(csv)
                 .header("Content-Disposition", "attachment; filename=\"reporte_ingresos_economicos.csv\"")
                 .build();
@@ -310,7 +297,6 @@ public class AuthController {
 
     /**
      * FORMATEADOR DE ERRORES
-     * Método auxiliar para enviar mensajes de error siempre en el mismo formato JSON.
      */
     private Response error(String mensaje) {
         return Response.status(400).entity("{\"mensaje\": \"" + mensaje + "\"}").build();
@@ -318,41 +304,30 @@ public class AuthController {
 
     /**
      * ALGORITMO OFICIAL MÓDULO 10 PARA CÉDULA ECUATORIANA
-     * Realiza operaciones matemáticas con los primeros 9 dígitos de la cédula
-     * para verificar si el resultado coincide con el décimo dígito (el verificador).
-     * @param cedula String de 10 números ingresado por el usuario.
-     * @return true si las matemáticas coinciden, false si es falsa o mal formada.
      */
     private boolean esCedulaValida(String cedula) {
-        // Verifica longitud y que solo contenga números
         if (cedula == null || !cedula.matches("\\d{10}")) return false;
 
-        // Verifica que la provincia sea válida (01 a 24)
         int provincia = Integer.parseInt(cedula.substring(0, 2));
         if (provincia < 1 || provincia > 24) return false;
 
-        // El tercer dígito para personas naturales debe ser menor a 6
         int tercerDigito = Integer.parseInt(cedula.substring(2, 3));
         if (tercerDigito >= 6) return false;
 
-        // Multiplicadores oficiales del Registro Civil
         int[] coeficientes = {2, 1, 2, 1, 2, 1, 2, 1, 2};
         int suma = 0;
 
-        // Multiplicar cada dígito por su coeficiente y sumar los resultados
         for (int i = 0; i < 9; i++) {
             int valor = Character.getNumericValue(cedula.charAt(i)) * coeficientes[i];
-            if (valor >= 10) valor -= 9; // Si el resultado es 10 o más, se le resta 9
+            if (valor >= 10) valor -= 9;
             suma += valor;
         }
 
-        // Extraer el dígito verificador y calcular el resultado final
         int digitoVerificador = Character.getNumericValue(cedula.charAt(9));
         int decenaSuperior = ((suma + 9) / 10) * 10;
         int resultado = decenaSuperior - suma;
         if (resultado == 10) resultado = 0;
 
-        // Si el resultado de la operación coincide con el último número de la cédula, es real
         return resultado == digitoVerificador;
     }
 }

@@ -181,7 +181,7 @@ public class UsuarioDAO {
                     u.setUsuario(rs.getString("usuario"));
                     u.setActivo(rs.getBoolean("activo"));
 
-                    // NUEVO: CAPTURAMOS LA EMPRESA DEL USUARIO
+                    // CAPTURAMOS LA EMPRESA DEL USUARIO
                     u.setIdEmpresa(rs.getInt("id_empresa"));
 
                     String email = rs.getString("email_cliente");
@@ -196,21 +196,27 @@ public class UsuarioDAO {
     }
 
     // ==========================================
-    // MÉTODO REAL PARA EL DASHBOARD DE ADMIN
+    // MÉTODO REAL PARA EL DASHBOARD DE ADMIN (CON MULTIEMPRESA)
     // ==========================================
-    public String getAdminStatsJSON() {
+    public String getAdminStatsJSON(int idEmpresa) {
         int totalClientes = 0;
         int totalEntrenadores = 0;
         double ingresos = 0.0;
 
         try (Connection conn = ConexionDB.getConnection()) {
-            ResultSet rs1 = conn.prepareStatement("SELECT COUNT(*) FROM clientes").executeQuery();
+            PreparedStatement ps1 = conn.prepareStatement("SELECT COUNT(*) FROM clientes WHERE id_empresa = ?");
+            ps1.setInt(1, idEmpresa);
+            ResultSet rs1 = ps1.executeQuery();
             if(rs1.next()) totalClientes = rs1.getInt(1);
 
-            ResultSet rs2 = conn.prepareStatement("SELECT COUNT(*) FROM entrenadores").executeQuery();
+            PreparedStatement ps2 = conn.prepareStatement("SELECT COUNT(*) FROM entrenadores WHERE id_empresa = ?");
+            ps2.setInt(1, idEmpresa);
+            ResultSet rs2 = ps2.executeQuery();
             if(rs2.next()) totalEntrenadores = rs2.getInt(1);
 
-            ResultSet rs3 = conn.prepareStatement("SELECT COALESCE(SUM(monto_pagado), 0) FROM pagos").executeQuery();
+            PreparedStatement ps3 = conn.prepareStatement("SELECT COALESCE(SUM(monto_pagado), 0) FROM pagos WHERE id_empresa = ?");
+            ps3.setInt(1, idEmpresa);
+            ResultSet rs3 = ps3.executeQuery();
             if(rs3.next()) ingresos = rs3.getDouble(1);
 
         } catch(Exception e) {
@@ -224,11 +230,9 @@ public class UsuarioDAO {
     // GESTIÓN DE USUARIOS (PANEL ADMIN)
     // ==========================================
 
-    // 1. Añadimos el parámetro idEmpresa
     public String obtenerUsuariosParaAdminJSON(int idEmpresa) {
         StringBuilder json = new StringBuilder("[");
 
-        // 2. Añadimos el filtro WHERE u.id_empresa = ? antes del ORDER BY
         String sql = "SELECT u.id_usuario, u.usuario, u.nombre, u.apellido, u.activo, r.nombre_rol, " +
                 "COALESCE(c.email, e.email) as email, " +
                 "c.telefono as telefono " +
@@ -236,14 +240,13 @@ public class UsuarioDAO {
                 "INNER JOIN roles r ON u.id_rol = r.id_rol " +
                 "LEFT JOIN clientes c ON u.id_usuario = c.id_usuario " +
                 "LEFT JOIN entrenadores e ON u.id_usuario = e.id_usuario " +
-                "WHERE u.id_empresa = ? " + // <-- AQUÍ ESTÁ LA MAGIA DEL AISLAMIENTO
+                "WHERE u.id_empresa = ? " +
                 "ORDER BY u.id_rol ASC, u.id_usuario DESC";
 
-        // 3. Modificamos el bloque try para poder inyectar el parámetro
         try (Connection conn = ConexionDB.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
-            ps.setInt(1, idEmpresa); // Inyectamos el ID de la empresa
+            ps.setInt(1, idEmpresa);
 
             try (ResultSet rs = ps.executeQuery()) {
                 boolean first = true;
@@ -285,7 +288,6 @@ public class UsuarioDAO {
             conn = ConexionDB.getConnection();
             conn.setAutoCommit(false);
 
-            // 1. Agregamos id_empresa al INSERT
             String sqlUser = "INSERT INTO usuarios (id_rol, usuario, contrasena, activo, nombre, apellido, id_empresa) VALUES (?, ?, ?, true, ?, ?, ?)";
             int nuevoIdUsuario = -1;
 
@@ -295,7 +297,7 @@ public class UsuarioDAO {
                 ps.setString(3, SecurityUtil.encriptar(u.getContrasena()));
                 ps.setString(4, u.getNombre());
                 ps.setString(5, u.getApellido());
-                ps.setInt(6, u.getIdEmpresa()); // <-- 2. Inyectamos el ID que mandó JS
+                ps.setInt(6, u.getIdEmpresa());
                 ps.executeUpdate();
 
                 ResultSet rs = ps.getGeneratedKeys();
@@ -310,22 +312,24 @@ public class UsuarioDAO {
             }
 
             if (u.getIdRol() == 4) { // Cliente
-                String sqlCli = "INSERT INTO clientes (id_usuario, nombre, apellido, email, telefono) VALUES (?, ?, ?, ?, ?)";
+                String sqlCli = "INSERT INTO clientes (id_usuario, nombre, apellido, email, telefono, id_empresa) VALUES (?, ?, ?, ?, ?, ?)";
                 try (PreparedStatement psCli = conn.prepareStatement(sqlCli)) {
                     psCli.setInt(1, nuevoIdUsuario);
                     psCli.setString(2, u.getNombre());
                     psCli.setString(3, u.getApellido());
                     psCli.setString(4, u.getEmail());
                     psCli.setString(5, u.getTelefono());
+                    psCli.setInt(6, u.getIdEmpresa());
                     psCli.executeUpdate();
                 }
             } else if (u.getIdRol() == 3) { // Entrenador
-                String sqlEnt = "INSERT INTO entrenadores (id_usuario, nombre, apellido, email) VALUES (?, ?, ?, ?)";
+                String sqlEnt = "INSERT INTO entrenadores (id_usuario, nombre, apellido, email, id_empresa) VALUES (?, ?, ?, ?, ?)";
                 try (PreparedStatement psEnt = conn.prepareStatement(sqlEnt)) {
                     psEnt.setInt(1, nuevoIdUsuario);
                     psEnt.setString(2, u.getNombre());
                     psEnt.setString(3, u.getApellido());
                     psEnt.setString(4, u.getEmail());
+                    psEnt.setInt(5, u.getIdEmpresa());
                     psEnt.executeUpdate();
                 }
             }
@@ -428,67 +432,67 @@ public class UsuarioDAO {
     }
 
     // ==========================================
-    // NUEVO MÓDULO: REPORTES GERENCIALES
+    // NUEVO MÓDULO: REPORTES GERENCIALES (CON MULTIEMPRESA)
     // ==========================================
-    public String getReportesJSON() {
+    public String getReportesJSON(int idEmpresa) {
         StringBuilder json = new StringBuilder("{");
 
         try (Connection conn = ConexionDB.getConnection()) {
 
-            // 1. Métricas de Usuarios (Total vs Activos)
             int totalClientes = 0;
             int clientesActivos = 0;
-            try(PreparedStatement ps = conn.prepareStatement("SELECT COUNT(*) FROM usuarios WHERE id_rol = 4");
-                ResultSet rs = ps.executeQuery()) {
-                if(rs.next()) totalClientes = rs.getInt(1);
-            }
-            try(PreparedStatement ps = conn.prepareStatement("SELECT COUNT(*) FROM usuarios WHERE id_rol = 4 AND activo = TRUE");
-                ResultSet rs = ps.executeQuery()) {
-                if(rs.next()) clientesActivos = rs.getInt(1);
-            }
 
-            // 2. Dinero Recaudado (Total Histórico y Mes Actual)
-            // Nota: Se asume que la columna de fecha en la tabla 'pagos' se llama 'fecha_pago'
+            PreparedStatement ps1 = conn.prepareStatement("SELECT COUNT(*) FROM usuarios WHERE id_rol = 4 AND id_empresa = ?");
+            ps1.setInt(1, idEmpresa);
+            ResultSet rs1 = ps1.executeQuery();
+            if(rs1.next()) totalClientes = rs1.getInt(1);
+
+            PreparedStatement ps2 = conn.prepareStatement("SELECT COUNT(*) FROM usuarios WHERE id_rol = 4 AND activo = TRUE AND id_empresa = ?");
+            ps2.setInt(1, idEmpresa);
+            ResultSet rs2 = ps2.executeQuery();
+            if(rs2.next()) clientesActivos = rs2.getInt(1);
+
             double ingresosTotales = 0.0;
             double ingresosMes = 0.0;
-            try(PreparedStatement ps = conn.prepareStatement("SELECT COALESCE(SUM(monto_pagado), 0) FROM pagos");
-                ResultSet rs = ps.executeQuery()) {
-                if(rs.next()) ingresosTotales = rs.getDouble(1);
-            }
-            try(PreparedStatement ps = conn.prepareStatement("SELECT COALESCE(SUM(monto_pagado), 0) FROM pagos WHERE EXTRACT(MONTH FROM fecha_pago) = EXTRACT(MONTH FROM CURRENT_DATE) AND EXTRACT(YEAR FROM fecha_pago) = EXTRACT(YEAR FROM CURRENT_DATE)");
-                ResultSet rs = ps.executeQuery()) {
-                if(rs.next()) ingresosMes = rs.getDouble(1);
-            }
 
-            // 3. Ingresos por Método de Pago (Para Gráfico de Dona)
+            PreparedStatement ps3 = conn.prepareStatement("SELECT COALESCE(SUM(monto_pagado), 0) FROM pagos WHERE id_empresa = ?");
+            ps3.setInt(1, idEmpresa);
+            ResultSet rs3 = ps3.executeQuery();
+            if(rs3.next()) ingresosTotales = rs3.getDouble(1);
+
+            PreparedStatement ps4 = conn.prepareStatement("SELECT COALESCE(SUM(monto_pagado), 0) FROM pagos WHERE EXTRACT(MONTH FROM fecha_pago) = EXTRACT(MONTH FROM CURRENT_DATE) AND EXTRACT(YEAR FROM fecha_pago) = EXTRACT(YEAR FROM CURRENT_DATE) AND id_empresa = ?");
+            ps4.setInt(1, idEmpresa);
+            ResultSet rs4 = ps4.executeQuery();
+            if(rs4.next()) ingresosMes = rs4.getDouble(1);
+
             json.append("\"ingresosPorMetodo\": [");
-            String sqlMetodos = "SELECT metodo_pago, COALESCE(SUM(monto_pagado), 0) as total FROM pagos GROUP BY metodo_pago";
-            try(PreparedStatement ps = conn.prepareStatement(sqlMetodos); ResultSet rs = ps.executeQuery()) {
-                boolean first = true;
-                while(rs.next()) {
-                    if(!first) json.append(",");
-                    String metodo = rs.getString("metodo_pago");
-                    if (metodo == null) metodo = "Otro";
-                    json.append("{\"metodo\": \"").append(metodo).append("\", \"total\": ").append(rs.getDouble("total")).append("}");
-                    first = false;
-                }
+            String sqlMetodos = "SELECT metodo_pago, COALESCE(SUM(monto_pagado), 0) as total FROM pagos WHERE id_empresa = ? GROUP BY metodo_pago";
+            PreparedStatement ps5 = conn.prepareStatement(sqlMetodos);
+            ps5.setInt(1, idEmpresa);
+            ResultSet rs5 = ps5.executeQuery();
+            boolean first = true;
+            while(rs5.next()) {
+                if(!first) json.append(",");
+                String metodo = rs5.getString("metodo_pago");
+                if (metodo == null) metodo = "Otro";
+                json.append("{\"metodo\": \"").append(metodo).append("\", \"total\": ").append(rs5.getDouble("total")).append("}");
+                first = false;
             }
             json.append("],");
 
-            // 4. Membresías más populares (Para Gráfico de Barras)
             json.append("\"membresiasPopulares\": [");
-            String sqlMembresias = "SELECT m.nombre, COUNT(p.id_pago) as cantidad FROM pagos p JOIN membresias m ON p.id_membresia = m.id_membresia GROUP BY m.nombre";
-            try(PreparedStatement ps = conn.prepareStatement(sqlMembresias); ResultSet rs = ps.executeQuery()) {
-                boolean first = true;
-                while(rs.next()) {
-                    if(!first) json.append(",");
-                    json.append("{\"nombre\": \"").append(rs.getString("nombre")).append("\", \"cantidad\": ").append(rs.getInt("cantidad")).append("}");
-                    first = false;
-                }
+            String sqlMembresias = "SELECT m.nombre, COUNT(p.id_pago) as cantidad FROM pagos p JOIN membresias m ON p.id_membresia = m.id_membresia WHERE p.id_empresa = ? GROUP BY m.nombre";
+            PreparedStatement ps6 = conn.prepareStatement(sqlMembresias);
+            ps6.setInt(1, idEmpresa);
+            ResultSet rs6 = ps6.executeQuery();
+            first = true;
+            while(rs6.next()) {
+                if(!first) json.append(",");
+                json.append("{\"nombre\": \"").append(rs6.getString("nombre")).append("\", \"cantidad\": ").append(rs6.getInt("cantidad")).append("}");
+                first = false;
             }
             json.append("],");
 
-            // 5. Agregamos las métricas sueltas al JSON para que JS las dibuje
             json.append("\"kpis\": {")
                     .append("\"totalClientes\": ").append(totalClientes).append(",")
                     .append("\"clientesActivos\": ").append(clientesActivos).append(",")
@@ -506,16 +510,18 @@ public class UsuarioDAO {
     }
 
     // ==========================================
-    // REQUERIMIENTOS RF08 Y RF09: GENERAR CSV DESDE EL BACKEND
+    // REQUERIMIENTOS RF08 Y RF09: GENERAR CSV DESDE EL BACKEND (CON MULTIEMPRESA)
     // ==========================================
 
-    public String getLogsAccesoCSV() {
+    public String getLogsAccesoCSV(int idEmpresa) {
         StringBuilder csv = new StringBuilder();
         csv.append("ID Registro,Usuario,Rol,Fecha y Hora,Direccion IP,Dispositivo,Estado de Ingreso\n");
         String sql = "SELECT l.id_log, u.usuario, r.nombre_rol, l.fecha_hora_log, l.direccion_ip, l.tipo_dispositivo, l.exitoso " +
                 "FROM logs_acceso l INNER JOIN usuarios u ON l.id_usuario = u.id_usuario INNER JOIN roles r ON u.id_rol = r.id_rol " +
-                "ORDER BY l.fecha_hora_log DESC";
-        try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
+                "WHERE u.id_empresa = ? ORDER BY l.fecha_hora_log DESC";
+        try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, idEmpresa);
+            ResultSet rs = ps.executeQuery();
             while (rs.next()) {
                 csv.append(rs.getInt("id_log")).append(",")
                         .append(rs.getString("usuario")).append(",")
@@ -529,11 +535,13 @@ public class UsuarioDAO {
         return csv.toString();
     }
 
-    public String getReporteIngresosCSV() {
+    public String getReporteIngresosCSV(int idEmpresa) {
         StringBuilder csv = new StringBuilder();
         csv.append("Metodo de Pago,Total Recaudado (USD)\n");
-        String sql = "SELECT metodo_pago, COALESCE(SUM(monto_pagado), 0) as total FROM pagos GROUP BY metodo_pago";
-        try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
+        String sql = "SELECT metodo_pago, COALESCE(SUM(monto_pagado), 0) as total FROM pagos WHERE id_empresa = ? GROUP BY metodo_pago";
+        try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, idEmpresa);
+            ResultSet rs = ps.executeQuery();
             while (rs.next()) {
                 String metodo = rs.getString("metodo_pago");
                 csv.append(metodo != null ? metodo : "Otro").append(",").append(rs.getDouble("total")).append("\n");

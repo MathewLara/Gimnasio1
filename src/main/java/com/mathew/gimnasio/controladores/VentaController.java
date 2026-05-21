@@ -85,11 +85,16 @@ public class VentaController {
     @GET
     @Path("/pendientes")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response getVentasPendientes() {
-        java.util.List<com.mathew.gimnasio.modelos.VentaPendienteDTO> pendientes = ventaDAO.obtenerVentasPendientes();
+    public Response getVentasPendientes(@QueryParam("idEmpresa") int idEmpresa) {
+        // Validación de seguridad
+        if (idEmpresa == 0) {
+            return Response.status(400).entity("{\"mensaje\":\"Falta la empresa\"}").build();
+        }
+
+        // Le pasamos el ID de la empresa al DAO
+        java.util.List<com.mathew.gimnasio.modelos.VentaPendienteDTO> pendientes = ventaDAO.obtenerVentasPendientes(idEmpresa);
         return Response.ok(pendientes).build();
     }
-
     /**
      * ENDPOINT: Marcar un producto como entregado
      * PUT /api/ventas/{id}/entregar
