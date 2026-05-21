@@ -285,7 +285,8 @@ public class UsuarioDAO {
             conn = ConexionDB.getConnection();
             conn.setAutoCommit(false);
 
-            String sqlUser = "INSERT INTO usuarios (id_rol, usuario, contrasena, activo, nombre, apellido) VALUES (?, ?, ?, true, ?, ?)";
+            // 1. Agregamos id_empresa al INSERT
+            String sqlUser = "INSERT INTO usuarios (id_rol, usuario, contrasena, activo, nombre, apellido, id_empresa) VALUES (?, ?, ?, true, ?, ?, ?)";
             int nuevoIdUsuario = -1;
 
             try (PreparedStatement ps = conn.prepareStatement(sqlUser, Statement.RETURN_GENERATED_KEYS)) {
@@ -294,6 +295,7 @@ public class UsuarioDAO {
                 ps.setString(3, SecurityUtil.encriptar(u.getContrasena()));
                 ps.setString(4, u.getNombre());
                 ps.setString(5, u.getApellido());
+                ps.setInt(6, u.getIdEmpresa()); // <-- 2. Inyectamos el ID que mandó JS
                 ps.executeUpdate();
 
                 ResultSet rs = ps.getGeneratedKeys();
