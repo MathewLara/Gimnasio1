@@ -19,9 +19,11 @@ public class ClienteDashboardDAO {
     /**
      * OBTENER TELEMETRÍA COMPLETA DEL SOCIO
      * @param idUsuario ID de autenticación del usuario logueado.
+     * @param idEmpresa ID de la empresa del usuario.
      * @return ResumenClienteDTO con el perfil, estado financiero, historial y rutina del día.
      */
-    public ResumenClienteDTO obtenerInfoDashboard(int idUsuario) {
+    // SE AÑADIÓ idEmpresa
+    public ResumenClienteDTO obtenerInfoDashboard(int idUsuario, int idEmpresa) {
         ResumenClienteDTO dto = new ResumenClienteDTO();
 
         try (Connection conn = ConexionDB.getConnection()) {
@@ -31,15 +33,18 @@ public class ClienteDashboardDAO {
              * Utiliza lógica condicional en SQL (CASE WHEN) para evaluar si el plan está vencido
              * basándose en la fecha del servidor (CURRENT_DATE).
              */
+            // SE AÑADIÓ JOIN u Y LA CONDICIÓN DE id_empresa
             String sql = "SELECT c.id_cliente, c.nombre || ' ' || c.apellido as n, c.email, c.telefono, " +
-                    "m.nombre as plan, m.precio, c.fecha_vencimiento, c.cancelado, " + // <--- AÑADE c.cancelado
+                    "m.nombre as plan, m.precio, c.fecha_vencimiento, c.cancelado, " +
                     "CASE WHEN c.fecha_vencimiento >= CURRENT_DATE THEN 'Activo' ELSE 'Vencido' END as estado " +
                     "FROM clientes c " +
                     "LEFT JOIN membresias m ON c.id_membresia = m.id_membresia " +
-                    "WHERE c.id_usuario = ?";
+                    "JOIN usuarios u ON c.id_usuario = u.id_usuario " +
+                    "WHERE c.id_usuario = ? AND u.id_empresa = ?";
 
             PreparedStatement ps = conn.prepareStatement(sql);
             ps.setInt(1, idUsuario);
+            ps.setInt(2, idEmpresa); // INYECTANDO LA EMPRESA
             ResultSet rs = ps.executeQuery();
 
             int idCliente = 0;
@@ -53,7 +58,7 @@ public class ClienteDashboardDAO {
                 dto.fechaVencimiento = rs.getString("fecha_vencimiento");
                 dto.estadoMembresia = rs.getString("estado");
                 dto.cancelado = rs.getBoolean("cancelado");
-            } else return null; // Aborta si el usuario no tiene un perfil de cliente asociado
+            } else return null; // Aborta si el usuario no tiene un perfil de cliente asociado o no pertenece a la empresa
 
             /* 2. HISTORIAL DE ASISTENCIAS (AJUSTE HORA ECUADOR)
              * Extrae los últimos 5 ingresos/salidas del cliente.
@@ -61,7 +66,7 @@ public class ClienteDashboardDAO {
              * para convertir la zona horaria (UTC a GMT-5) y asegurar que el frontend muestre la hora real.
              */
             dto.historialAsistencias = new ArrayList<>();
-            // Restamos 5 horas a la entrada y a la salida para que coincida con Ecuador
+            // Restamos 5 hours a la entrada y a la salida para que coincida con Ecuador
             String sqlAsist = "SELECT to_char(fecha_hora_ingreso - INTERVAL '5 hours', 'YYYY-MM-DD') as f, " +
                     "to_char(fecha_hora_ingreso - INTERVAL '5 hours', 'HH24:MI:SS') as h_in, " +
                     "to_char(fecha_hora_salida - INTERVAL '5 hours', 'HH24:MI:SS') as h_out " +
@@ -135,11 +140,14 @@ public class ClienteDashboardDAO {
      * Inserta un registro en el historial para gamificación y control del entrenador.
      * Implementa protección anti-duplicados usando "WHERE NOT EXISTS" directamente en SQL.
      */
-    public boolean registrarTerminoRutina(int idUsuario) {
+    // SE AÑADIÓ idEmpresa
+    public boolean registrarTerminoRutina(int idUsuario, int idEmpresa) {
         try (Connection conn = ConexionDB.getConnection()) {
-            String sqlInfo = "SELECT id_cliente, id_rutina FROM rutinas WHERE id_cliente = (SELECT id_cliente FROM clientes WHERE id_usuario = ?) ORDER BY id_rutina DESC LIMIT 1";
+            // SE AÑADIÓ JOIN u Y LA CONDICIÓN DE id_empresa PARA AISLAMIENTO
+            String sqlInfo = "SELECT r.id_cliente, r.id_rutina FROM rutinas r JOIN clientes c ON r.id_cliente = c.id_cliente JOIN usuarios u ON c.id_usuario = u.id_usuario WHERE u.id_usuario = ? AND u.id_empresa = ? ORDER BY r.id_rutina DESC LIMIT 1";
             PreparedStatement ps = conn.prepareStatement(sqlInfo);
             ps.setInt(1, idUsuario);
+            ps.setInt(2, idEmpresa); // INYECTANDO LA EMPRESA
             ResultSet rs = ps.executeQuery();
 
             if (rs.next()) {
@@ -165,12 +173,14 @@ public class ClienteDashboardDAO {
      * No elimina al usuario, solo enciende una bandera (cancelado = TRUE)
      * para cortar el acceso a los servicios físicos y lógicos.
      */
-    public boolean cancelarSuscripcion(int idUsuario) {
-        // Ahora sí guardamos el estado de cancelación real
-        String sql = "UPDATE clientes SET cancelado = TRUE WHERE id_usuario = ?";
+    // SE AÑADIÓ idEmpresa
+    public boolean cancelarSuscripcion(int idUsuario, int idEmpresa) {
+        // SE AÑADIÓ LA VERIFICACIÓN EXISTS PARA GARANTIZAR QUE EL USUARIO PERTENECE A LA EMPRESA
+        String sql = "UPDATE clientes SET cancelado = TRUE WHERE id_usuario = ? AND EXISTS (SELECT 1 FROM usuarios u WHERE u.id_usuario = clientes.id_usuario AND u.id_empresa = ?)";
         try (Connection conn = ConexionDB.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, idUsuario);
+            ps.setInt(2, idEmpresa); // INYECTANDO LA EMPRESA
             return ps.executeUpdate() > 0;
         } catch (Exception e) {
             e.printStackTrace();

@@ -22,35 +22,38 @@ public class ClienteController {
      * Recupera el conjunto de datos necesarios para renderizar el Dashboard del cliente.
      * * El recurso es accesible mediante el metodo HTTP GET. Retorna un objeto JSON
      * que contiene el perfil, asistencias y ejercicios actuales del usuario.
-     * * URL: GET /api/clientes/{idUsuario}/dashboard
+     * * URL: GET /api/clientes/{idUsuario}/dashboard?idEmpresa=X
      * * @param id Identificador de usuario extraído de la ruta de la URL.
      * @return Response Objeto de respuesta HTTP con el DTO serializado en formato JSON.
      */
     @GET
     @Path("/{idUsuario}/dashboard")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response dashboard(@PathParam("idUsuario") int id) {
-        // Delegación de la lógica de negocio al componente DAO especializado
-        ResumenClienteDTO datos = dao.obtenerInfoDashboard(id);
+    // SE AÑADIÓ idEmpresa
+    public Response dashboard(@PathParam("idUsuario") int id, @QueryParam("idEmpresa") int idEmpresa) {
+        // Delegación de la lógica de negocio al componente DAO especializado (pasando idEmpresa)
+        ResumenClienteDTO datos = dao.obtenerInfoDashboard(id, idEmpresa);
         // Respuesta exitosa (HTTP 200) con el cuerpo del mensaje poblado
         if (datos != null) return Response.ok(datos).build();
         // Respuesta de error controlado (HTTP 404) cuando el recurso no existe
         return Response.status(404).entity("{\"mensaje\":\"Cliente no encontrado\"}").build();
     }
+
     /**
      * Procesa la notificación de finalización de una sesión de entrenamiento.
      * * Este recurso utiliza el metodo HTTP POST para realizar una escritura persistente
      * en el historial de actividades del gimnasio.
-     * * URL: POST /api/clientes/{idUsuario}/completar
+     * * URL: POST /api/clientes/{idUsuario}/completar?idEmpresa=X
      * * @param id Identificador del usuario que finaliza la actividad.
      * @return Response Confirmación de la operación o aviso de registro existente.
      */
     @POST
     @Path("/{idUsuario}/completar")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response completarRutina(@PathParam("idUsuario") int id) {
-        // Ejecución de la persistencia de datos mediante el DAO
-        boolean exito = dao.registrarTerminoRutina(id);
+    // SE AÑADIÓ idEmpresa
+    public Response completarRutina(@PathParam("idUsuario") int id, @QueryParam("idEmpresa") int idEmpresa) {
+        // Ejecución de la persistencia de datos mediante el DAO (pasando idEmpresa)
+        boolean exito = dao.registrarTerminoRutina(id, idEmpresa);
 
         if (exito) {
             // Confirmación de inserción correcta en la base de datos
@@ -61,15 +64,18 @@ public class ClienteController {
             return Response.ok("{\"mensaje\": \"Ya estaba registrado hoy\"}").build();
         }
     }
+
     /**
      * Procesa la cancelación de la suscripción del cliente.
-     * URL: PUT /api/clientes/{idUsuario}/cancelar
+     * URL: PUT /api/clientes/{idUsuario}/cancelar?idEmpresa=X
      */
     @PUT
     @Path("/{idUsuario}/cancelar")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response cancelarSuscripcion(@PathParam("idUsuario") int id) {
-        boolean exito = dao.cancelarSuscripcion(id);
+    // SE AÑADIÓ idEmpresa
+    public Response cancelarSuscripcion(@PathParam("idUsuario") int id, @QueryParam("idEmpresa") int idEmpresa) {
+        // Pasando idEmpresa por seguridad
+        boolean exito = dao.cancelarSuscripcion(id, idEmpresa);
 
         if (exito) {
             return Response.ok("{\"mensaje\": \"Suscripción cancelada permanentemente\"}").build();
