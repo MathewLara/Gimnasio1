@@ -18,19 +18,27 @@ public class EntrenadorDAO {
 
     /**
      * MÉTODO INTERNO: OBTENER ID DEL CLIENTE FANTASMA
+     * CORRECCIÓN: Se inyectó idEmpresa para aislar las plantillas y evitar el Error 500
      */
-    private int obtenerIdPlantilla(Connection conn) throws Exception {
-        PreparedStatement ps = conn.prepareStatement("SELECT id_cliente FROM clientes WHERE nombre = 'Plantilla' AND apellido = 'Sistema'");
+    private int obtenerIdPlantilla(Connection conn, int idEmpresa) throws Exception {
+        String queryBusqueda = "SELECT c.id_cliente FROM clientes c JOIN usuarios u ON c.id_usuario = u.id_usuario WHERE c.nombre = 'Plantilla' AND c.apellido = 'Sistema' AND u.id_empresa = ?";
+        PreparedStatement ps = conn.prepareStatement(queryBusqueda);
+        ps.setInt(1, idEmpresa);
         ResultSet rs = ps.executeQuery();
         if (rs.next()) return rs.getInt(1);
 
-        ps = conn.prepareStatement("INSERT INTO usuarios (id_rol, usuario, contrasena, nombre, apellido, activo) VALUES (3, 'plantilla_sys', '12345', 'Plantilla', 'Sistema', false) RETURNING id_usuario");
+        // Se agregó id_empresa al INSERT y un usuario único
+        ps = conn.prepareStatement("INSERT INTO usuarios (id_rol, usuario, contrasena, nombre, apellido, activo, id_empresa) VALUES (3, ?, '12345', 'Plantilla', 'Sistema', false, ?) RETURNING id_usuario");
+        ps.setString(1, "plantilla_sys_" + idEmpresa);
+        ps.setInt(2, idEmpresa);
         rs = ps.executeQuery();
         int idUsr = 0;
         if (rs.next()) idUsr = rs.getInt(1);
 
-        ps = conn.prepareStatement("INSERT INTO clientes (id_usuario, nombre, apellido, email, telefono) VALUES (?, 'Plantilla', 'Sistema', 'plantilla@sistema.com', '0000000000') RETURNING id_cliente");
+        // Se genera un email único para la plantilla de la empresa
+        ps = conn.prepareStatement("INSERT INTO clientes (id_usuario, nombre, apellido, email, telefono) VALUES (?, 'Plantilla', 'Sistema', ?, '0000000000') RETURNING id_cliente");
         ps.setInt(1, idUsr);
+        ps.setString(2, "plantilla_" + idEmpresa + "@sistema.com");
         rs = ps.executeQuery();
         if (rs.next()) return rs.getInt(1);
 
@@ -43,7 +51,7 @@ public class EntrenadorDAO {
     public EntrenadorDashboardDTO obtenerDashboard(int idUsuario, int idEmpresa) { // <-- AQUÍ YA RECIBE LOS 2 PARÁMETROS
         EntrenadorDashboardDTO dto = new EntrenadorDashboardDTO();
         try (Connection conn = ConexionDB.getConnection()) {
-            int idPlantilla = obtenerIdPlantilla(conn);
+            int idPlantilla = obtenerIdPlantilla(conn, idEmpresa); // <-- CORRECCIÓN
 
             String sqlEnt = "SELECT id_entrenador, nombre || ' ' || apellido as n, especialidad FROM entrenadores WHERE id_usuario = ?";
             PreparedStatement ps = conn.prepareStatement(sqlEnt);
@@ -112,13 +120,14 @@ public class EntrenadorDAO {
         return dto;
     }
 
-    public boolean crearRutina(int idUsuarioEntrenador, NuevaRutinaDTO datos) {
+    // CORRECCIÓN: Se añadió idEmpresa
+    public boolean crearRutina(int idUsuarioEntrenador, int idEmpresa, NuevaRutinaDTO datos) {
         Connection conn = null;
         try {
             conn = ConexionDB.getConnection();
             conn.setAutoCommit(false);
 
-            int idPlantilla = obtenerIdPlantilla(conn);
+            int idPlantilla = obtenerIdPlantilla(conn, idEmpresa); // <-- CORRECCIÓN
 
             int idEntrenador = 0;
             PreparedStatement ps = conn.prepareStatement("SELECT id_entrenador FROM entrenadores WHERE id_usuario = ?");
@@ -159,12 +168,14 @@ public class EntrenadorDAO {
         }
     }
 
-    public boolean modificarRutina(int idRutina, NuevaRutinaDTO datos) {
+    // CORRECCIÓN: Se añadió idEmpresa
+    public boolean modificarRutina(int idRutina, int idEmpresa, NuevaRutinaDTO datos) {
         Connection conn = null;
         try {
             conn = ConexionDB.getConnection();
             conn.setAutoCommit(false);
-            int idPlantilla = obtenerIdPlantilla(conn);
+
+            int idPlantilla = obtenerIdPlantilla(conn, idEmpresa); // <-- CORRECCIÓN
 
             String sqlUpdate = "UPDATE rutinas SET nombre_rutina = ?, id_cliente = ? WHERE id_rutina = ?";
             PreparedStatement ps = conn.prepareStatement(sqlUpdate);
@@ -208,9 +219,10 @@ public class EntrenadorDAO {
         } catch (Exception e) { e.printStackTrace(); return false; }
     }
 
-    public boolean reactivarRutina(int idRutina) {
+    // CORRECCIÓN: Se añadió idEmpresa
+    public boolean reactivarRutina(int idRutina, int idEmpresa) {
         try (Connection conn = ConexionDB.getConnection()) {
-            int idPlantilla = obtenerIdPlantilla(conn);
+            int idPlantilla = obtenerIdPlantilla(conn, idEmpresa); // <-- CORRECCIÓN
             String sql = "UPDATE rutinas SET activa = TRUE, id_cliente = ? WHERE id_rutina = ?";
             PreparedStatement ps = conn.prepareStatement(sql);
             ps.setInt(1, idPlantilla);
@@ -225,7 +237,7 @@ public class EntrenadorDAO {
     public java.util.List<EntrenadorDashboardDTO.AlumnoResumen> obtenerAgendaHoy(int idUsuarioEntrenador, int idEmpresa) { // <-- AQUÍ YA RECIBE LOS 2 PARÁMETROS
         java.util.List<EntrenadorDashboardDTO.AlumnoResumen> agenda = new ArrayList<>();
         try (Connection conn = ConexionDB.getConnection()) {
-            int idPlantilla = obtenerIdPlantilla(conn);
+            int idPlantilla = obtenerIdPlantilla(conn, idEmpresa); // <-- CORRECCIÓN
 
             String sql = "SELECT c.id_usuario, c.nombre || ' ' || c.apellido as n, r.nombre_rutina, " +
                     "CASE WHEN h.id_historial IS NOT NULL THEN 'SI' ELSE 'NO' END as completo " +

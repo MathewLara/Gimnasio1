@@ -45,8 +45,10 @@ public class EntrenadorController {
     @Path("/{idUsuario}/crearRutina")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    public Response crearRutina(@PathParam("idUsuario") int idUsuario, NuevaRutinaDTO datos) {
-        boolean exito = dao.crearRutina(idUsuario, datos);
+    // CORRECCIÓN: Se añadió @QueryParam("idEmpresa") para la arquitectura multi-empresa
+    public Response crearRutina(@PathParam("idUsuario") int idUsuario, @QueryParam("idEmpresa") int idEmpresa, NuevaRutinaDTO datos) {
+        // CORRECCIÓN: Se inyecta idEmpresa al DAO
+        boolean exito = dao.crearRutina(idUsuario, idEmpresa, datos);
         if (exito) return Response.ok("{\"mensaje\": \"Rutina guardada con éxito\"}").build();
         return Response.status(500).entity("{\"mensaje\": \"Error al guardar la rutina\"}").build();
     }
@@ -59,8 +61,10 @@ public class EntrenadorController {
     @Path("/rutinas/{idRutina}")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    public Response modificarRutina(@PathParam("idRutina") int idRutina, NuevaRutinaDTO datos) {
-        boolean exito = dao.crearRutina(idRutina, datos);
+    // CORRECCIÓN: Se añadió @QueryParam("idEmpresa")
+    public Response modificarRutina(@PathParam("idRutina") int idRutina, @QueryParam("idEmpresa") int idEmpresa, NuevaRutinaDTO datos) {
+        // CORRECCIÓN CRÍTICA: Se cambió dao.crearRutina por dao.modificarRutina y se añadió idEmpresa
+        boolean exito = dao.modificarRutina(idRutina, idEmpresa, datos);
         if (exito) return Response.ok("{\"mensaje\": \"Rutina editada con éxito\"}").build();
         return Response.status(500).entity("{\"mensaje\": \"Error al editar la rutina\"}").build();
     }
@@ -85,8 +89,10 @@ public class EntrenadorController {
     @PUT
     @Path("/rutinas/{idRutina}/reactivar")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response restaurarRutina(@PathParam("idRutina") int idRutina) {
-        boolean exito = dao.reactivarRutina(idRutina);
+    // CORRECCIÓN: Se añadió @QueryParam("idEmpresa")
+    public Response restaurarRutina(@PathParam("idRutina") int idRutina, @QueryParam("idEmpresa") int idEmpresa) {
+        // CORRECCIÓN: Se inyecta idEmpresa al DAO
+        boolean exito = dao.reactivarRutina(idRutina, idEmpresa);
         if (exito) return Response.ok("{\"mensaje\": \"Rutina restaurada con éxito\"}").build();
         return Response.status(500).entity("{\"mensaje\": \"Error al restaurar la rutina\"}").build();
     }
