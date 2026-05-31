@@ -160,6 +160,9 @@ public class RecepcionDAO {
             }
 
             if (idAsistencia != -1) {
+                // ==========================================
+                // CASO A: MARCAR SALIDA (SE QUEDA IGUAL)
+                // ==========================================
                 String sqlOut = "UPDATE asistencias SET fecha_hora_salida = CURRENT_TIMESTAMP WHERE id_asistencia = ?";
                 try(PreparedStatement ps = conn.prepareStatement(sqlOut)) {
                     ps.setInt(1, idAsistencia);
@@ -171,6 +174,24 @@ public class RecepcionDAO {
 
                 return "{\"status\":\"ok\", \"tipo\":\"Salida\", \"mensaje\":\"¡Hasta pronto, " + nombreUsuario + "! Salida a las " + horaFmt + "\"}";
             } else {
+                // ==========================================
+                // REGLA DE NEGOCIO: 1 ACCESO (ENTRADA/SALIDA) POR DÍA
+                // ==========================================
+                String sqlValidacionDia = "SELECT COUNT(*) FROM asistencias WHERE id_cliente = ? AND DATE(fecha_hora_ingreso) = CURRENT_DATE";
+
+                try(PreparedStatement psValidacion = conn.prepareStatement(sqlValidacionDia)) {
+                    psValidacion.setInt(1, idCliente);
+                    ResultSet rsValidacion = psValidacion.executeQuery();
+
+                    if (rsValidacion.next() && rsValidacion.getInt(1) > 0) {
+                        // Si el conteo es mayor a 0, ya consumió su pase diario. Se rechaza la entrada.
+                        return "{\"status\":\"error\", \"mensaje\":\"Acceso Denegado: Ya utilizaste tu acceso del día de hoy. ¡Vuelve mañana!\"}";
+                    }
+                }
+
+                // ==========================================
+                // CASO B: MARCAR ENTRADA (SI PASÓ LA VALIDACIÓN)
+                // ==========================================
                 String codigoUnico = identificador.trim() + "_" + System.currentTimeMillis();
 
                 String sqlIn = "INSERT INTO asistencias (id_cliente, fecha_hora_ingreso, dispositivo_qr, codigo_validado) VALUES (?, CURRENT_TIMESTAMP, 'Escáner Recepción', ?)";
