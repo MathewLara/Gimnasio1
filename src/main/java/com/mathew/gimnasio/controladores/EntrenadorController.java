@@ -98,7 +98,7 @@ public class EntrenadorController {
     }
 
     /**
-     * VINCULAR UN ALUMNO (Asignarle un entrenador y una rutina inicial)
+     * VINCULAR UN NUEVO ALUMNO O ASIGNARLE MÁS RUTINAS
      * URL: POST /api/entrenadores/{id}/alumnos
      */
     @POST
@@ -106,13 +106,19 @@ public class EntrenadorController {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public Response vincularAlumno(@PathParam("idUsuario") int idUsuario, com.mathew.gimnasio.modelos.AsignarAlumnoDTO datos) {
-        boolean exito = dao.vincularAlumno(idUsuario, datos);
-        if (exito) return Response.ok("{\"mensaje\": \"Alumno vinculado exitosamente\"}").build();
-        return Response.status(500).entity("{\"mensaje\": \"Error al vincular alumno\"}").build();
+        String resultado = dao.vincularAlumno(idUsuario, datos);
+        if (resultado.equals("OK")) {
+            return Response.ok("{\"mensaje\": \"Rutina asignada exitosamente al alumno.\"}").build();
+        } else if (resultado.startsWith("LÍMITE")) {
+            // Mandamos Error 400 (Bad Request) para que JavaScript lance la alerta al usuario
+            return Response.status(400).entity("{\"mensaje\": \"" + resultado + "\"}").build();
+        } else {
+            return Response.status(500).entity("{\"mensaje\": \"Error al guardar en base de datos\"}").build();
+        }
     }
 
     /**
-     * EDITAR LA RUTINA DE UN ALUMNO (Usa la misma lógica de vinculación para reasignar)
+     * EDITAR LA RUTINA DE UN ALUMNO (Acumulativo)
      * URL: PUT /api/entrenadores/{id}/alumnos
      */
     @PUT
@@ -120,9 +126,14 @@ public class EntrenadorController {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public Response actualizarAlumno(@PathParam("idUsuario") int idUsuario, com.mathew.gimnasio.modelos.AsignarAlumnoDTO datos) {
-        boolean exito = dao.vincularAlumno(idUsuario, datos);
-        if (exito) return Response.ok("{\"mensaje\": \"Rutina del alumno actualizada\"}").build();
-        return Response.status(500).entity("{\"mensaje\": \"Error al actualizar alumno\"}").build();
+        String resultado = dao.vincularAlumno(idUsuario, datos);
+        if (resultado.equals("OK")) {
+            return Response.ok("{\"mensaje\": \"Nueva rutina sumada al alumno.\"}").build();
+        } else if (resultado.startsWith("LÍMITE")) {
+            return Response.status(400).entity("{\"mensaje\": \"" + resultado + "\"}").build();
+        } else {
+            return Response.status(500).entity("{\"mensaje\": \"Error al guardar en base de datos\"}").build();
+        }
     }
 
     /**
