@@ -45,9 +45,7 @@ public class EntrenadorController {
     @Path("/{idUsuario}/crearRutina")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    // CORRECCIÓN: Se añadió @QueryParam("idEmpresa") para la arquitectura multi-empresa
     public Response crearRutina(@PathParam("idUsuario") int idUsuario, @QueryParam("idEmpresa") int idEmpresa, NuevaRutinaDTO datos) {
-        // CORRECCIÓN: Se inyecta idEmpresa al DAO
         boolean exito = dao.crearRutina(idUsuario, idEmpresa, datos);
         if (exito) return Response.ok("{\"mensaje\": \"Rutina guardada con éxito\"}").build();
         return Response.status(500).entity("{\"mensaje\": \"Error al guardar la rutina\"}").build();
@@ -61,9 +59,7 @@ public class EntrenadorController {
     @Path("/rutinas/{idRutina}")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    // CORRECCIÓN: Se añadió @QueryParam("idEmpresa")
     public Response modificarRutina(@PathParam("idRutina") int idRutina, @QueryParam("idEmpresa") int idEmpresa, NuevaRutinaDTO datos) {
-        // CORRECCIÓN CRÍTICA: Se cambió dao.crearRutina por dao.modificarRutina y se añadió idEmpresa
         boolean exito = dao.modificarRutina(idRutina, idEmpresa, datos);
         if (exito) return Response.ok("{\"mensaje\": \"Rutina editada con éxito\"}").build();
         return Response.status(500).entity("{\"mensaje\": \"Error al editar la rutina\"}").build();
@@ -89,9 +85,7 @@ public class EntrenadorController {
     @PUT
     @Path("/rutinas/{idRutina}/reactivar")
     @Produces(MediaType.APPLICATION_JSON)
-    // CORRECCIÓN: Se añadió @QueryParam("idEmpresa")
     public Response restaurarRutina(@PathParam("idRutina") int idRutina, @QueryParam("idEmpresa") int idEmpresa) {
-        // CORRECCIÓN: Se inyecta idEmpresa al DAO
         boolean exito = dao.reactivarRutina(idRutina, idEmpresa);
         if (exito) return Response.ok("{\"mensaje\": \"Rutina restaurada con éxito\"}").build();
         return Response.status(500).entity("{\"mensaje\": \"Error al restaurar la rutina\"}").build();
@@ -106,14 +100,13 @@ public class EntrenadorController {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public Response vincularAlumno(@PathParam("idUsuario") int idUsuario, com.mathew.gimnasio.modelos.AsignarAlumnoDTO datos) {
-        String resultado = dao.vincularAlumno(idUsuario, datos);
-        if (resultado.equals("OK")) {
+        // CORRECCIÓN: Ahora atrapa el boolean correctamente
+        boolean exito = dao.vincularAlumno(idUsuario, datos);
+        if (exito) {
             return Response.ok("{\"mensaje\": \"Rutina asignada exitosamente al alumno.\"}").build();
-        } else if (resultado.startsWith("LÍMITE")) {
-            // Mandamos Error 400 (Bad Request) para que JavaScript lance la alerta al usuario
-            return Response.status(400).entity("{\"mensaje\": \"" + resultado + "\"}").build();
         } else {
-            return Response.status(500).entity("{\"mensaje\": \"Error al guardar en base de datos\"}").build();
+            // Si devuelve false, asumimos que es por la regla de negocio del límite de 10
+            return Response.status(400).entity("{\"mensaje\": \"Límite de rutinas alcanzado (Máx 10). Ocurrió un error en la asignación.\"}").build();
         }
     }
 
@@ -126,13 +119,12 @@ public class EntrenadorController {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public Response actualizarAlumno(@PathParam("idUsuario") int idUsuario, com.mathew.gimnasio.modelos.AsignarAlumnoDTO datos) {
-        String resultado = dao.vincularAlumno(idUsuario, datos);
-        if (resultado.equals("OK")) {
+        // CORRECCIÓN: Ahora atrapa el boolean correctamente
+        boolean exito = dao.vincularAlumno(idUsuario, datos);
+        if (exito) {
             return Response.ok("{\"mensaje\": \"Nueva rutina sumada al alumno.\"}").build();
-        } else if (resultado.startsWith("LÍMITE")) {
-            return Response.status(400).entity("{\"mensaje\": \"" + resultado + "\"}").build();
         } else {
-            return Response.status(500).entity("{\"mensaje\": \"Error al guardar en base de datos\"}").build();
+            return Response.status(400).entity("{\"mensaje\": \"No se pudo sumar la rutina. Es posible que el alumno ya tenga el límite de 10 activas.\"}").build();
         }
     }
 
