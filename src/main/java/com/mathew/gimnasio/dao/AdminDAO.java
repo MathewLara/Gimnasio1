@@ -128,16 +128,22 @@ public class AdminDAO {
     // ==========================================
     public String obtenerPlanesJSON(int idEmpresa) {
         StringBuilder json = new StringBuilder("[");
-        String sql = "SELECT id_membresia, nombre, precio, descripcion, activo FROM membresias WHERE id_empresa = ? ORDER BY id_membresia ASC";
+
+        // AJUSTA ESTE SQL: Si no usas id_empresa, quita el "WHERE id_empresa = ?"
+        String sql = "SELECT id_tipo_membresia, nombre_tipo, precio, descripcion, activo FROM tipo_membresia ORDER BY id_tipo_membresia ASC";
+
         try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, idEmpresa);
+            // Si quitaste el WHERE arriba, elimina esta línea:
+            // ps.setInt(1, idEmpresa);
+
             try (ResultSet rs = ps.executeQuery()) {
                 boolean first = true;
                 while (rs.next()) {
                     if (!first) json.append(",");
                     json.append("{")
-                            .append("\"id\":").append(rs.getInt("id_membresia")).append(",")
-                            .append("\"nombre\":\"").append(rs.getString("nombre")).append("\",")
+                            // Asegúrate de que los nombres en rs.get() coincidan con tu tabla
+                            .append("\"id\":").append(rs.getInt("id_tipo_membresia")).append(",")
+                            .append("\"nombre\":\"").append(rs.getString("nombre_tipo")).append("\",")
                             .append("\"precio\":").append(rs.getDouble("precio")).append(",")
                             .append("\"descripcion\":\"").append(rs.getString("descripcion") != null ? rs.getString("descripcion").replace("\n", " ").replace("\r", "") : "").append("\",")
                             .append("\"activo\":").append(rs.getBoolean("activo"))
@@ -151,14 +157,20 @@ public class AdminDAO {
     }
 
     public boolean guardarPlan(String nombre, double precio, String descripcion, int idEmpresa) {
-        String sql = "INSERT INTO membresias (nombre, precio, descripcion, id_empresa, activo) VALUES (?, ?, ?, ?, TRUE)";
+        // AJUSTA ESTE SQL: Pon exactamente los nombres de las columnas de tu imagen
+        String sql = "INSERT INTO tipo_membresia (nombre_tipo, precio, descripcion, activo) VALUES (?, ?, ?, TRUE)";
         try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, nombre);
             ps.setDouble(2, precio);
+
+            // Si tu tabla no tiene descripción, elimina esta línea y ajusta los signos de interrogación arriba
             ps.setString(3, descripcion);
-            ps.setInt(4, idEmpresa);
+
             return ps.executeUpdate() > 0;
-        } catch (Exception e) { e.printStackTrace(); return false; }
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 
     public boolean editarPlan(int id, String nombre, double precio, String descripcion, int idEmpresa) {
