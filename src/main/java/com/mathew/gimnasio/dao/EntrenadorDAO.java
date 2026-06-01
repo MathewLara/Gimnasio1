@@ -397,4 +397,59 @@ public class EntrenadorDAO {
             return false;
         }
     }
+
+    // ==========================================
+    // MÓDULO DE EJERCICIOS
+    // ==========================================
+    public String obtenerEjerciciosJSON() {
+        StringBuilder json = new StringBuilder("[");
+        String sql = "SELECT id_ejercicio, nombre_ejercicio, grupo_muscular, activo FROM ejercicios ORDER BY id_ejercicio ASC";
+
+        try (Connection conn = ConexionDB.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+
+            boolean first = true;
+            while (rs.next()) {
+                if (!first) json.append(",");
+                json.append("{")
+                        .append("\"id\":").append(rs.getInt("id_ejercicio")).append(",")
+                        .append("\"nombre\":\"").append(rs.getString("nombre_ejercicio")).append("\",")
+                        .append("\"grupo\":\"").append(rs.getString("grupo_muscular")).append("\",")
+                        .append("\"activo\":").append(rs.getBoolean("activo"))
+                        .append("}");
+                first = false;
+            }
+        } catch (Exception e) { e.printStackTrace(); }
+        json.append("]");
+        return json.toString();
+    }
+
+    public boolean guardarEjercicio(String nombre, String grupo) {
+        String sql = "INSERT INTO ejercicios (nombre_ejercicio, grupo_muscular, activo) VALUES (?, ?, TRUE)";
+        try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, nombre);
+            ps.setString(2, grupo);
+            return ps.executeUpdate() > 0;
+        } catch (Exception e) { e.printStackTrace(); return false; }
+    }
+
+    public boolean editarEjercicio(int id, String nombre, String grupo) {
+        String sql = "UPDATE ejercicios SET nombre_ejercicio=?, grupo_muscular=? WHERE id_ejercicio=?";
+        try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, nombre);
+            ps.setString(2, grupo);
+            ps.setInt(3, id);
+            return ps.executeUpdate() > 0;
+        } catch (Exception e) { e.printStackTrace(); return false; }
+    }
+
+    public boolean cambiarEstadoEjercicio(int id, boolean estado) {
+        String sql = "UPDATE ejercicios SET activo=? WHERE id_ejercicio=?";
+        try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setBoolean(1, estado);
+            ps.setInt(2, id);
+            return ps.executeUpdate() > 0;
+        } catch (Exception e) { e.printStackTrace(); return false; }
+    }
 }

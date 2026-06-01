@@ -152,4 +152,58 @@ public class EntrenadorController {
         // Obtenemos la agenda del día filtrando también por el ID de la empresa
         return Response.ok(dao.obtenerAgendaHoy(id, idEmpresa)).build();
     }
+
+    // ==========================================
+    // ENDPOINTS DE EJERCICIOS
+    // ==========================================
+    @GET
+    @Path("/ejercicios")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response getEjercicios() {
+        return Response.ok(dao.obtenerEjerciciosJSON()).build();
+    }
+
+    @POST
+    @Path("/ejercicios")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response crearEjercicio(java.util.Map<String, Object> data) {
+        try {
+            String nombre = String.valueOf(data.get("nombre"));
+            String grupo = String.valueOf(data.get("grupo"));
+
+            boolean ok = dao.guardarEjercicio(nombre, grupo);
+            if(ok) return Response.ok("{\"mensaje\":\"Ejercicio creado\"}").build();
+            return Response.status(500).entity("{\"mensaje\":\"Error al crear en base de datos\"}").build();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Response.status(400).entity("{\"mensaje\":\"Error de formato: " + e.getMessage() + "\"}").build();
+        }
+    }
+
+    @PUT
+    @Path("/ejercicios/{id}")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response editarEjercicio(@PathParam("id") int id, java.util.Map<String, Object> data) {
+        try {
+            String nombre = String.valueOf(data.get("nombre"));
+            String grupo = String.valueOf(data.get("grupo"));
+
+            boolean ok = dao.editarEjercicio(id, nombre, grupo);
+            if(ok) return Response.ok("{\"mensaje\":\"Ejercicio actualizado\"}").build();
+            return Response.status(500).entity("{\"mensaje\":\"Error al actualizar en base de datos\"}").build();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Response.status(400).entity("{\"mensaje\":\"Error de formato: " + e.getMessage() + "\"}").build();
+        }
+    }
+
+    @PUT
+    @Path("/ejercicios/{id}/estado")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response cambiarEstadoEjercicio(@PathParam("id") int id, @QueryParam("activo") boolean activo) {
+        dao.cambiarEstadoEjercicio(id, activo);
+        return Response.ok("{\"mensaje\":\"Estado del ejercicio actualizado\"}").build();
+    }
 }
