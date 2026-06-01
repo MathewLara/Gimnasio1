@@ -31,8 +31,8 @@ public class SuperAdminController {
     @Produces(MediaType.APPLICATION_JSON)
     public Response crearEmpresa(Map<String, String> data) {
         boolean ok = dao.guardarEmpresa(data.get("nombre"), data.get("ruc"), data.get("telefono"), data.get("direccion"));
-        if(ok) return Response.ok("{\"mensaje\":\"Empresa creada exitosamente\"}").build();
-        return Response.status(500).entity("{\"mensaje\":\"Error al crear la empresa\"}").build();
+        if(ok) return Response.ok("{\"mensaje\":\"Empresa creada\"}").build();
+        return Response.status(500).entity("{\"mensaje\":\"Error (RUC duplicado)\"}").build();
     }
 
     @PUT
@@ -41,17 +41,16 @@ public class SuperAdminController {
     @Produces(MediaType.APPLICATION_JSON)
     public Response editarEmpresa(@PathParam("id") int id, Map<String, String> data) {
         boolean ok = dao.editarEmpresa(id, data.get("nombre"), data.get("ruc"), data.get("telefono"), data.get("direccion"));
-        if(ok) return Response.ok("{\"mensaje\":\"Empresa actualizada exitosamente\"}").build();
-        return Response.status(500).entity("{\"mensaje\":\"Error al actualizar la empresa\"}").build();
+        if(ok) return Response.ok("{\"mensaje\":\"Empresa actualizada\"}").build();
+        return Response.status(500).entity("{\"mensaje\":\"Error al actualizar\"}").build();
     }
 
     @PUT
     @Path("/empresas/{id}/estado")
     @Produces(MediaType.APPLICATION_JSON)
     public Response cambiarEstadoEmpresa(@PathParam("id") int id, @QueryParam("activo") boolean activo) {
-        boolean ok = dao.cambiarEstadoEmpresa(id, activo);
-        if(ok) return Response.ok("{\"mensaje\":\"Estado de empresa actualizado\"}").build();
-        return Response.status(500).entity("{\"mensaje\":\"Error al actualizar el estado\"}").build();
+        dao.cambiarEstadoEmpresa(id, activo);
+        return Response.ok("{\"mensaje\":\"Estado actualizado\"}").build();
     }
 
     @GET
@@ -67,17 +66,27 @@ public class SuperAdminController {
     @Produces(MediaType.APPLICATION_JSON)
     public Response crearAdmin(Map<String, String> data) {
         int idEmpresa = Integer.parseInt(String.valueOf(data.get("idEmpresa")));
-        boolean ok = dao.guardarAdmin(idEmpresa, data.get("nombre"), data.get("apellido"), data.get("email"), data.get("telefono"), data.get("usuario"), data.get("contrasena"));
-        if(ok) return Response.ok("{\"mensaje\":\"Administrador creado exitosamente\"}").build();
-        return Response.status(500).entity("{\"mensaje\":\"Error al crear el administrador (Usuario duplicado)\"}").build();
+        boolean ok = dao.guardarAdmin(idEmpresa, data.get("nombre"), data.get("apellido"), data.get("usuario"), data.get("contrasena"));
+        if(ok) return Response.ok("{\"mensaje\":\"Dueño creado\"}").build();
+        return Response.status(500).entity("{\"mensaje\":\"Error (Usuario duplicado)\"}").build();
+    }
+
+    @PUT
+    @Path("/administradores/{id}")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response editarAdmin(@PathParam("id") int id, Map<String, String> data) {
+        int idEmpresa = Integer.parseInt(String.valueOf(data.get("idEmpresa")));
+        boolean ok = dao.editarAdmin(id, idEmpresa, data.get("nombre"), data.get("apellido"), data.get("usuario"), data.get("contrasena"));
+        if(ok) return Response.ok("{\"mensaje\":\"Dueño actualizado\"}").build();
+        return Response.status(500).entity("{\"mensaje\":\"Error al actualizar\"}").build();
     }
 
     @PUT
     @Path("/administradores/{id}/estado")
     @Produces(MediaType.APPLICATION_JSON)
     public Response cambiarEstadoAdmin(@PathParam("id") int id, @QueryParam("activo") boolean activo) {
-        boolean ok = dao.cambiarEstadoAdmin(id, activo);
-        if(ok) return Response.ok("{\"mensaje\":\"Estado actualizado\"}").build();
-        return Response.status(500).entity("{\"mensaje\":\"Error al actualizar estado\"}").build();
+        dao.cambiarEstadoAdmin(id, activo);
+        return Response.ok("{\"mensaje\":\"Estado actualizado\"}").build();
     }
 }

@@ -6,7 +6,6 @@ import com.mathew.gimnasio.util.SecurityUtil;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.sql.Statement;
 
 public class SuperAdminDAO {
 
@@ -22,7 +21,7 @@ public class SuperAdminDAO {
             ResultSet rs = conn.createStatement().executeQuery("SELECT COUNT(*) FROM empresas");
             if (rs.next()) totalEmpresas = rs.getInt(1);
 
-            rs = conn.createStatement().executeQuery("SELECT COUNT(*) FROM usuarios WHERE id_rol IN (1,2,3,4)");
+            rs = conn.createStatement().executeQuery("SELECT COUNT(*) FROM usuarios WHERE id_rol = 1");
             if (rs.next()) totalUsuarios = rs.getInt(1);
 
             rs = conn.createStatement().executeQuery("SELECT COALESCE(SUM(monto_pagado), 0) FROM pagos");
@@ -30,23 +29,9 @@ public class SuperAdminDAO {
 
             json.append("\"totalEmpresas\":").append(totalEmpresas).append(",");
             json.append("\"totalUsuarios\":").append(totalUsuarios).append(",");
-            json.append("\"totalIngresos\":").append(totalIngresos).append(",");
-
-            json.append("\"ultimasEmpresas\":[");
-            rs = conn.createStatement().executeQuery("SELECT nombre_empresa, activo FROM empresas ORDER BY id_empresa DESC LIMIT 5");
-            boolean first = true;
-            while (rs.next()) {
-                if (!first) json.append(",");
-                json.append("{")
-                        .append("\"nombre\":\"").append(rs.getString("nombre_empresa")).append("\",")
-                        .append("\"estado\":\"").append(rs.getBoolean("activo") ? "Activo" : "Inactivo").append("\"")
-                        .append("}");
-                first = false;
-            }
-            json.append("]");
-
+            json.append("\"totalIngresos\":").append(totalIngresos);
         } catch (Exception e) {
-            return "{\"totalEmpresas\":0,\"totalUsuarios\":0,\"totalIngresos\":0,\"ultimasEmpresas\":[]}";
+            return "{\"totalEmpresas\":0,\"totalUsuarios\":0,\"totalIngresos\":0}";
         }
         json.append("}");
         return json.toString();
@@ -57,23 +42,19 @@ public class SuperAdminDAO {
     // ==========================================
     public String getEmpresasJSON() {
         StringBuilder json = new StringBuilder("[");
-        String sql = "SELECT e.id_empresa, e.nombre_empresa, e.ruc_nit, e.telefono, e.activo, e.fecha_registro, " +
+        String sql = "SELECT e.id_empresa, e.nombre_empresa, e.ruc_nit, e.telefono, e.activo, " +
                 "(SELECT COUNT(*) FROM clientes c WHERE c.id_empresa = e.id_empresa) as total_clientes " +
                 "FROM empresas e ORDER BY e.id_empresa ASC";
         try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
             boolean first = true;
             while (rs.next()) {
                 if (!first) json.append(",");
-                String fecha = rs.getString("fecha_registro");
-                if(fecha != null && fecha.length() > 10) fecha = fecha.substring(0, 10);
-
                 json.append("{")
                         .append("\"id\":").append(rs.getInt("id_empresa")).append(",")
                         .append("\"nombre\":\"").append(rs.getString("nombre_empresa") != null ? rs.getString("nombre_empresa") : "").append("\",")
                         .append("\"ruc\":\"").append(rs.getString("ruc_nit") != null ? rs.getString("ruc_nit") : "").append("\",")
                         .append("\"telefono\":\"").append(rs.getString("telefono") != null ? rs.getString("telefono") : "").append("\",")
                         .append("\"estado\":").append(rs.getBoolean("activo")).append(",")
-                        .append("\"fecha_registro\":\"").append(fecha != null ? fecha : "").append("\",")
                         .append("\"total_clientes\":").append(rs.getInt("total_clientes"))
                         .append("}");
                 first = false;
@@ -120,11 +101,8 @@ public class SuperAdminDAO {
     // ==========================================
     public String getAdministradoresJSON() {
         StringBuilder json = new StringBuilder("[");
-        String sql = "SELECT u.id_usuario, u.usuario, u.nombre, u.apellido, u.activo, e.nombre_empresa, " +
-                "COALESCE(c.email, '') as email, COALESCE(c.telefono, '') as telefono " +
-                "FROM usuarios u " +
-                "JOIN empresas e ON u.id_empresa = e.id_empresa " +
-                "LEFT JOIN clientes c ON u.id_usuario = c.id_usuario " +
+        String sql = "SELECT u.id_usuario, u.id_empresa, u.usuario, u.nombre, u.apellido, u.activo, e.nombre_empresa " +
+                "FROM usuarios u JOIN empresas e ON u.id_empresa = e.id_empresa " +
                 "WHERE u.id_rol = 1 ORDER BY u.id_usuario DESC";
         try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
             boolean first = true;
@@ -132,12 +110,11 @@ public class SuperAdminDAO {
                 if (!first) json.append(",");
                 json.append("{")
                         .append("\"id\":").append(rs.getInt("id_usuario")).append(",")
+                        .append("\"id_empresa\":").append(rs.getInt("id_empresa")).append(",")
                         .append("\"usuario\":\"").append(rs.getString("usuario")).append("\",")
                         .append("\"nombre\":\"").append(rs.getString("nombre") != null ? rs.getString("nombre") : "").append("\",")
                         .append("\"apellido\":\"").append(rs.getString("apellido") != null ? rs.getString("apellido") : "").append("\",")
                         .append("\"empresa\":\"").append(rs.getString("nombre_empresa")).append("\",")
-                        .append("\"email\":\"").append(rs.getString("email")).append("\",")
-                        .append("\"telefono\":\"").append(rs.getString("telefono")).append("\",")
                         .append("\"estado\":").append(rs.getBoolean("activo"))
                         .append("}");
                 first = false;
@@ -147,50 +124,39 @@ public class SuperAdminDAO {
         return json.toString();
     }
 
-    public boolean guardarAdmin(int idEmpresa, String nombre, String apellido, String email, String telefono, String usuario, String contrasena) {
-        Connection conn = null;
-        try {
-            conn = ConexionDB.getConnection();
-            // INICIAMOS TRANSACCIÓN: O se guarda todo perfecto, o no se guarda nada
-            conn.setAutoCommit(false);
+    public boolean guardarAdmin(int idEmpresa, String nombre, String apellido, String usuario, String contrasena) {
+        // SOLUCIÓN MISTERIO 1: Insertamos solo en Usuarios. Adiós al choque de base de datos.
+        String sql = "INSERT INTO usuarios (id_rol, id_empresa, usuario, contrasena, nombre, apellido, activo) VALUES (1, ?, ?, ?, ?, ?, TRUE)";
+        try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, idEmpresa);
+            ps.setString(2, usuario);
+            ps.setString(3, SecurityUtil.encriptar(contrasena));
+            ps.setString(4, nombre);
+            ps.setString(5, apellido);
+            return ps.executeUpdate() > 0;
+        } catch (Exception e) { return false; }
+    }
 
-            String sql = "INSERT INTO usuarios (id_rol, id_empresa, usuario, contrasena, nombre, apellido, activo) VALUES (1, ?, ?, ?, ?, ?, TRUE)";
-            try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-                ps.setInt(1, idEmpresa);
-                ps.setString(2, usuario);
-                ps.setString(3, SecurityUtil.encriptar(contrasena));
-                ps.setString(4, nombre);
-                ps.setString(5, apellido);
+    public boolean editarAdmin(int idUsuario, int idEmpresa, String nombre, String apellido, String usuario, String contrasena) {
+        // Si no envía contraseña, solo editamos los datos
+        boolean cambiarPass = (contrasena != null && !contrasena.trim().isEmpty());
+        String sql = cambiarPass ?
+                "UPDATE usuarios SET id_empresa=?, nombre=?, apellido=?, usuario=?, contrasena=? WHERE id_usuario=?" :
+                "UPDATE usuarios SET id_empresa=?, nombre=?, apellido=?, usuario=? WHERE id_usuario=?";
 
-                if (ps.executeUpdate() > 0) {
-                    ResultSet rs = ps.getGeneratedKeys();
-                    if(rs.next()){
-                        int idUsuario = rs.getInt(1);
-
-                        // CORRECCIÓN: Solo guardamos los campos que de verdad existen en la tabla clientes
-                        String sqlCli = "INSERT INTO clientes (id_usuario, nombre, apellido, email, telefono) VALUES (?, ?, ?, ?, ?)";
-                        try(PreparedStatement psC = conn.prepareStatement(sqlCli)){
-                            psC.setInt(1, idUsuario);
-                            psC.setString(2, nombre);
-                            psC.setString(3, apellido);
-                            psC.setString(4, email);
-                            psC.setString(5, telefono);
-                            psC.executeUpdate();
-                        }
-                    }
-                    conn.commit(); // TODO SALIÓ BIEN, GUARDAMOS DEFINITIVAMENTE
-                    return true;
-                }
+        try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, idEmpresa);
+            ps.setString(2, nombre);
+            ps.setString(3, apellido);
+            ps.setString(4, usuario);
+            if (cambiarPass) {
+                ps.setString(5, SecurityUtil.encriptar(contrasena));
+                ps.setInt(6, idUsuario);
+            } else {
+                ps.setInt(5, idUsuario);
             }
-            conn.rollback(); // Si falló algo arriba, echamos para atrás el registro
-            return false;
-        } catch (Exception e) {
-            e.printStackTrace();
-            if(conn != null) try { conn.rollback(); } catch(Exception ex){} // Rescate en caso de colapso
-            return false;
-        } finally {
-            if(conn != null) try { conn.close(); } catch(Exception ex){}
-        }
+            return ps.executeUpdate() > 0;
+        } catch (Exception e) { return false; }
     }
 
     public boolean cambiarEstadoAdmin(int id, boolean estado) {
