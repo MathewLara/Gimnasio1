@@ -58,33 +58,44 @@ public class AdminController {
     @Path("/planes")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    public Response crearPlan(java.util.Map<String, Object> data) { // Cambiado a Object
-        int idEmpresa = Integer.parseInt(String.valueOf(data.get("idEmpresa")));
-        double precio = Double.parseDouble(String.valueOf(data.get("precio")));
+    public Response crearPlan(java.util.Map<String, Object> data) {
+        try {
+            // Solución blindada para números flotantes provenientes de JS
+            int idEmpresa = (int) Double.parseDouble(String.valueOf(data.get("idEmpresa")));
+            double precio = Double.parseDouble(String.valueOf(data.get("precio")));
 
-        // Convertimos explícitamente a String
-        String nombre = String.valueOf(data.get("nombre"));
-        String descripcion = String.valueOf(data.get("descripcion"));
+            String nombre = String.valueOf(data.get("nombre"));
+            String descripcion = String.valueOf(data.get("descripcion"));
 
-        boolean ok = adminDAO.guardarPlan(nombre, precio, descripcion, idEmpresa);
-        if(ok) return Response.ok("{\"mensaje\":\"Plan creado\"}").build();
-        return Response.status(500).entity("{\"mensaje\":\"Error al crear\"}").build();
+            boolean ok = adminDAO.guardarPlan(nombre, precio, descripcion, idEmpresa);
+            if(ok) return Response.ok("{\"mensaje\":\"Plan creado\"}").build();
+            return Response.status(500).entity("{\"mensaje\":\"Error al crear en la BDD\"}").build();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Response.status(400).entity("{\"mensaje\":\"Error en Java: " + e.getMessage() + "\"}").build();
+        }
     }
 
     @PUT
     @Path("/planes/{id}")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    public Response editarPlan(@PathParam("id") int id, java.util.Map<String, Object> data) { // Cambiado a Object
-        int idEmpresa = Integer.parseInt(String.valueOf(data.get("idEmpresa")));
-        double precio = Double.parseDouble(String.valueOf(data.get("precio")));
+    public Response editarPlan(@PathParam("id") int id, java.util.Map<String, Object> data) {
+        try {
+            // Solución blindada para números flotantes provenientes de JS
+            int idEmpresa = (int) Double.parseDouble(String.valueOf(data.get("idEmpresa")));
+            double precio = Double.parseDouble(String.valueOf(data.get("precio")));
 
-        String nombre = String.valueOf(data.get("nombre"));
-        String descripcion = String.valueOf(data.get("descripcion"));
+            String nombre = String.valueOf(data.get("nombre"));
+            String descripcion = String.valueOf(data.get("descripcion"));
 
-        boolean ok = adminDAO.editarPlan(id, nombre, precio, descripcion, idEmpresa);
-        if(ok) return Response.ok("{\"mensaje\":\"Plan actualizado\"}").build();
-        return Response.status(500).entity("{\"mensaje\":\"Error al actualizar\"}").build();
+            boolean ok = adminDAO.editarPlan(id, nombre, precio, descripcion, idEmpresa);
+            if(ok) return Response.ok("{\"mensaje\":\"Plan actualizado\"}").build();
+            return Response.status(500).entity("{\"mensaje\":\"Error al actualizar en la BDD\"}").build();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Response.status(400).entity("{\"mensaje\":\"Error en Java: " + e.getMessage() + "\"}").build();
+        }
     }
 
     @PUT
