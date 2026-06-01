@@ -148,34 +148,49 @@ public class SuperAdminDAO {
     }
 
     public boolean guardarAdmin(int idEmpresa, String nombre, String apellido, String email, String telefono, String usuario, String contrasena) {
-        String sql = "INSERT INTO usuarios (id_rol, id_empresa, usuario, contrasena, nombre, apellido, activo) VALUES (1, ?, ?, ?, ?, ?, TRUE)";
-        try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-            ps.setInt(1, idEmpresa);
-            ps.setString(2, usuario);
-            ps.setString(3, SecurityUtil.encriptar(contrasena)); // Se encripta la clave para seguridad
-            ps.setString(4, nombre);
-            ps.setString(5, apellido);
+        Connection conn = null;
+        try {
+            conn = ConexionDB.getConnection();
+            // INICIAMOS TRANSACCIÓN: O se guarda todo perfecto, o no se guarda nada
+            conn.setAutoCommit(false);
 
-            if (ps.executeUpdate() > 0) {
-                ResultSet rs = ps.getGeneratedKeys();
-                if(rs.next()){
-                    int idUsuario = rs.getInt(1);
-                    // Insertamos también en clientes para tener su email/teléfono como referencia
-                    String sqlCli = "INSERT INTO clientes (id_usuario, id_empresa, nombre, apellido, email, telefono) VALUES (?, ?, ?, ?, ?, ?)";
-                    try(PreparedStatement psC = conn.prepareStatement(sqlCli)){
-                        psC.setInt(1, idUsuario);
-                        psC.setInt(2, idEmpresa);
-                        psC.setString(3, nombre);
-                        psC.setString(4, apellido);
-                        psC.setString(5, email);
-                        psC.setString(6, telefono);
-                        psC.executeUpdate();
+            String sql = "INSERT INTO usuarios (id_rol, id_empresa, usuario, contrasena, nombre, apellido, activo) VALUES (1, ?, ?, ?, ?, ?, TRUE)";
+            try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+                ps.setInt(1, idEmpresa);
+                ps.setString(2, usuario);
+                ps.setString(3, SecurityUtil.encriptar(contrasena));
+                ps.setString(4, nombre);
+                ps.setString(5, apellido);
+
+                if (ps.executeUpdate() > 0) {
+                    ResultSet rs = ps.getGeneratedKeys();
+                    if(rs.next()){
+                        int idUsuario = rs.getInt(1);
+
+                        // CORRECCIÓN: Solo guardamos los campos que de verdad existen en la tabla clientes
+                        String sqlCli = "INSERT INTO clientes (id_usuario, nombre, apellido, email, telefono) VALUES (?, ?, ?, ?, ?)";
+                        try(PreparedStatement psC = conn.prepareStatement(sqlCli)){
+                            psC.setInt(1, idUsuario);
+                            psC.setString(2, nombre);
+                            psC.setString(3, apellido);
+                            psC.setString(4, email);
+                            psC.setString(5, telefono);
+                            psC.executeUpdate();
+                        }
                     }
+                    conn.commit(); // TODO SALIÓ BIEN, GUARDAMOS DEFINITIVAMENTE
+                    return true;
                 }
-                return true;
             }
+            conn.rollback(); // Si falló algo arriba, echamos para atrás el registro
             return false;
-        } catch (Exception e) { return false; }
+        } catch (Exception e) {
+            e.printStackTrace();
+            if(conn != null) try { conn.rollback(); } catch(Exception ex){} // Rescate en caso de colapso
+            return false;
+        } finally {
+            if(conn != null) try { conn.close(); } catch(Exception ex){}
+        }
     }
 
     public boolean cambiarEstadoAdmin(int id, boolean estado) {
