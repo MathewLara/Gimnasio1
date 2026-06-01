@@ -7,23 +7,12 @@ import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * DATA ACCESS OBJECT (DAO) DE ADMINISTRACIÓN
- * Esta clase concentra toda la lógica de persistencia exclusiva del rol Administrador.
- * Utiliza JDBC puro (Java Database Connectivity) para garantizar el máximo rendimiento
- * en consultas estadísticas pesadas y cruces de tablas (JOINs).
- */
 public class AdminDAO {
 
-    /**
-     * OBTENER ESTADÍSTICAS GERENCIALES (KPIs)
-     * Compila los indicadores clave de rendimiento del gimnasio ejecutando múltiples
-     * consultas ligeras y empaquetándolas en un único objeto de transferencia (DashboardDTO).
-     *
-     * @return DashboardDTO con toda la telemetría poblada.
-     */
+    // ==========================================
     // 1. OBTENER ESTADÍSTICAS
-    public DashboardDTO obtenerEstadisticas(int idEmpresa) { // <-- Recibe empresa
+    // ==========================================
+    public DashboardDTO obtenerEstadisticas(int idEmpresa) {
         DashboardDTO dash = new DashboardDTO();
         Connection conn = null;
         try {
@@ -76,29 +65,23 @@ public class AdminDAO {
                         accesos.add(acc);
                     }
                 }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+            } catch (Exception e) { e.printStackTrace(); }
             dash.setUltimosAccesos(accesos);
 
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            try {
-                if (conn != null) conn.close();
-            } catch (Exception e) {
-            }
-        }
+        } catch (Exception e) { e.printStackTrace(); }
+        finally { try { if (conn != null) conn.close(); } catch (Exception e) {} }
         return dash;
     }
 
+    // ==========================================
     // 2. HISTORIAL DE PAGOS
-    public String obtenerHistorialPagosJSON(int idEmpresa) { // <-- Recibe empresa
+    // ==========================================
+    public String obtenerHistorialPagosJSON(int idEmpresa) {
         StringBuilder json = new StringBuilder("[");
         String sql = "SELECT p.id_pago, u.usuario, p.monto_pagado, p.fecha_pago, p.metodo_pago, p.id_membresia " +
                 "FROM pagos p INNER JOIN clientes c ON p.id_cliente = c.id_cliente " +
                 "INNER JOIN usuarios u ON c.id_usuario = u.id_usuario " +
-                "WHERE p.id_empresa = ? ORDER BY p.fecha_pago DESC"; // <-- El filtro mágico
+                "WHERE p.id_empresa = ? ORDER BY p.fecha_pago DESC";
 
         try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, idEmpresa);
@@ -117,14 +100,14 @@ public class AdminDAO {
                     first = false;
                 }
             }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        } catch (Exception e) { e.printStackTrace(); }
         json.append("]");
         return json.toString();
     }
 
+    // ==========================================
     // 3. REGISTRAR PAGO
+    // ==========================================
     public boolean registrarPago(int idUsuario, int idPlan, double monto, String metodo, int idEmpresa) {
         String sql = "INSERT INTO pagos (id_cliente, id_membresia, monto_pagado, metodo_pago, fecha_pago, id_empresa) " +
                 "SELECT id_cliente, ?, ?, ?, CURRENT_TIMESTAMP, ? " +
@@ -134,12 +117,68 @@ public class AdminDAO {
             ps.setInt(1, idPlan);
             ps.setDouble(2, monto);
             ps.setString(3, metodo);
-            ps.setInt(4, idEmpresa); // Inyectamos la empresa a la que va el dinero
+            ps.setInt(4, idEmpresa);
             ps.setInt(5, idUsuario);
             return ps.executeUpdate() > 0;
-        } catch (Exception e) {
-            e.printStackTrace();
-            return false;
-        }
+        } catch (Exception e) { e.printStackTrace(); return false; }
+    }
+
+    // ==========================================
+    // 4. GESTIÓN DE PLANES / MEMBRESÍAS (NUEVO)
+    // ==========================================
+    public String obtenerPlanesJSON(int idEmpresa) {
+        StringBuilder json = new StringBuilder("[");
+        String sql = "SELECT id_membresia, nombre, precio, descripcion, activo FROM membresias WHERE id_empresa = ? ORDER BY id_membresia ASC";
+        try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, idEmpresa);
+            try (ResultSet rs = ps.executeQuery()) {
+                boolean first = true;
+                while (rs.next()) {
+                    if (!first) json.append(",");
+                    json.append("{")
+                            .append("\"id\":").append(rs.getInt("id_membresia")).append(",")
+                            .append("\"nombre\":\"").append(rs.getString("nombre")).append("\",")
+                            .append("\"precio\":").append(rs.getDouble("precio")).append(",")
+                            .append("\"descripcion\":\"").append(rs.getString("descripcion") != null ? rs.getString("descripcion").replace("\n", " ").replace("\r", "") : "").append("\",")
+                            .append("\"activo\":").append(rs.getBoolean("activo"))
+                            .append("}");
+                    first = false;
+                }
+            }
+        } catch (Exception e) { e.printStackTrace(); }
+        json.append("]");
+        return json.toString();
+    }
+
+    public boolean guardarPlan(String nombre, double precio, String descripcion, int idEmpresa) {
+        String sql = "INSERT INTO membresias (nombre, precio, descripcion, id_empresa, activo) VALUES (?, ?, ?, ?, TRUE)";
+        try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, nombre);
+            ps.setDouble(2, precio);
+            ps.setString(3, descripcion);
+            ps.setInt(4, idEmpresa);
+            return ps.executeUpdate() > 0;
+        } catch (Exception e) { e.printStackTrace(); return false; }
+    }
+
+    public boolean editarPlan(int id, String nombre, double precio, String descripcion, int idEmpresa) {
+        String sql = "UPDATE membresias SET nombre=?, precio=?, descripcion=? WHERE id_membresia=? AND id_empresa=?";
+        try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, nombre);
+            ps.setDouble(2, precio);
+            ps.setString(3, descripcion);
+            ps.setInt(4, id);
+            ps.setInt(5, idEmpresa);
+            return ps.executeUpdate() > 0;
+        } catch (Exception e) { e.printStackTrace(); return false; }
+    }
+
+    public boolean cambiarEstadoPlan(int id, boolean estado) {
+        String sql = "UPDATE membresias SET activo=? WHERE id_membresia=?";
+        try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setBoolean(1, estado);
+            ps.setInt(2, id);
+            return ps.executeUpdate() > 0;
+        } catch (Exception e) { e.printStackTrace(); return false; }
     }
 }

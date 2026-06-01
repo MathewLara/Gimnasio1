@@ -6,27 +6,15 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
-/**
- * CONTROLADOR DE ADMINISTRACIÓN
- * Gestiona los Endpoints exclusivos para el perfil gerencial.
- * Actúa como un proxy entre las peticiones HTTP del DashboardAdmin.js
- * y las sentencias SQL complejas del AdminDAO.
- */
 @Path("/admin")
 public class AdminController {
 
-    // Instancia del Data Access Object encargado de la persistencia administrativa
     private AdminDAO adminDAO = new AdminDAO();
 
-    /**
-     * OBTENER TELEMETRÍA DEL DASHBOARD
-     * URL: GET /api/admin/dashboard
-     * @return Objeto JSON (DashboardDTO) con los KPIs y métricas consolidadas.
-     */
     @GET
     @Path("/dashboard")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response getDashboard(@QueryParam("idEmpresa") int idEmpresa) { // <- Atrapa el ID de la URL
+    public Response getDashboard(@QueryParam("idEmpresa") int idEmpresa) {
         if (idEmpresa == 0) return Response.status(400).build();
         DashboardDTO stats = adminDAO.obtenerEstadisticas(idEmpresa);
         return Response.ok(stats).build();
@@ -35,7 +23,7 @@ public class AdminController {
     @GET
     @Path("/pagos")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response getPagos(@QueryParam("idEmpresa") int idEmpresa) { // <- Atrapa el ID de la URL
+    public Response getPagos(@QueryParam("idEmpresa") int idEmpresa) {
         if (idEmpresa == 0) return Response.status(400).build();
         return Response.ok(adminDAO.obtenerHistorialPagosJSON(idEmpresa)).build();
     }
@@ -49,10 +37,52 @@ public class AdminController {
         int idP = Integer.parseInt(data.get("idPlan").toString());
         double m = Double.parseDouble(data.get("monto").toString());
         String met = data.get("metodo").toString();
-        // Atrapamos el ID que nos mande el JS en el JSON
         int idEmpresa = Integer.parseInt(data.get("idEmpresa").toString());
 
         boolean ok = adminDAO.registrarPago(idU, idP, m, met, idEmpresa);
         return ok ? Response.ok("{\"status\":\"ok\"}").build() : Response.status(400).entity("{\"status\":\"error\"}").build();
+    }
+
+    // ==========================================
+    // ENDPOINTS DE PLANES / MEMBRESÍAS
+    // ==========================================
+    @GET
+    @Path("/planes")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response getPlanes(@QueryParam("idEmpresa") int idEmpresa) {
+        if (idEmpresa == 0) return Response.status(400).build();
+        return Response.ok(adminDAO.obtenerPlanesJSON(idEmpresa)).build();
+    }
+
+    @POST
+    @Path("/planes")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response crearPlan(java.util.Map<String, String> data) {
+        int idEmpresa = Integer.parseInt(String.valueOf(data.get("idEmpresa")));
+        double precio = Double.parseDouble(String.valueOf(data.get("precio")));
+        boolean ok = adminDAO.guardarPlan(data.get("nombre"), precio, data.get("descripcion"), idEmpresa);
+        if(ok) return Response.ok("{\"mensaje\":\"Plan creado\"}").build();
+        return Response.status(500).entity("{\"mensaje\":\"Error al crear\"}").build();
+    }
+
+    @PUT
+    @Path("/planes/{id}")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response editarPlan(@PathParam("id") int id, java.util.Map<String, String> data) {
+        int idEmpresa = Integer.parseInt(String.valueOf(data.get("idEmpresa")));
+        double precio = Double.parseDouble(String.valueOf(data.get("precio")));
+        boolean ok = adminDAO.editarPlan(id, data.get("nombre"), precio, data.get("descripcion"), idEmpresa);
+        if(ok) return Response.ok("{\"mensaje\":\"Plan actualizado\"}").build();
+        return Response.status(500).entity("{\"mensaje\":\"Error al actualizar\"}").build();
+    }
+
+    @PUT
+    @Path("/planes/{id}/estado")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response cambiarEstadoPlan(@PathParam("id") int id, @QueryParam("activo") boolean activo) {
+        adminDAO.cambiarEstadoPlan(id, activo);
+        return Response.ok("{\"mensaje\":\"Estado actualizado\"}").build();
     }
 }
