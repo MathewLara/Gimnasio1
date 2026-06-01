@@ -58,10 +58,15 @@ public class AdminController {
     @Path("/planes")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    public Response crearPlan(java.util.Map<String, String> data) {
+    public Response crearPlan(java.util.Map<String, Object> data) { // Cambiado a Object
         int idEmpresa = Integer.parseInt(String.valueOf(data.get("idEmpresa")));
         double precio = Double.parseDouble(String.valueOf(data.get("precio")));
-        boolean ok = adminDAO.guardarPlan(data.get("nombre"), precio, data.get("descripcion"), idEmpresa);
+
+        // Convertimos explícitamente a String
+        String nombre = String.valueOf(data.get("nombre"));
+        String descripcion = String.valueOf(data.get("descripcion"));
+
+        boolean ok = adminDAO.guardarPlan(nombre, precio, descripcion, idEmpresa);
         if(ok) return Response.ok("{\"mensaje\":\"Plan creado\"}").build();
         return Response.status(500).entity("{\"mensaje\":\"Error al crear\"}").build();
     }
@@ -70,10 +75,14 @@ public class AdminController {
     @Path("/planes/{id}")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    public Response editarPlan(@PathParam("id") int id, java.util.Map<String, String> data) {
+    public Response editarPlan(@PathParam("id") int id, java.util.Map<String, Object> data) { // Cambiado a Object
         int idEmpresa = Integer.parseInt(String.valueOf(data.get("idEmpresa")));
         double precio = Double.parseDouble(String.valueOf(data.get("precio")));
-        boolean ok = adminDAO.editarPlan(id, data.get("nombre"), precio, data.get("descripcion"), idEmpresa);
+
+        String nombre = String.valueOf(data.get("nombre"));
+        String descripcion = String.valueOf(data.get("descripcion"));
+
+        boolean ok = adminDAO.editarPlan(id, nombre, precio, descripcion, idEmpresa);
         if(ok) return Response.ok("{\"mensaje\":\"Plan actualizado\"}").build();
         return Response.status(500).entity("{\"mensaje\":\"Error al actualizar\"}").build();
     }
