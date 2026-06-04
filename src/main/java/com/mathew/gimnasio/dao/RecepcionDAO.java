@@ -3,20 +3,8 @@ package com.mathew.gimnasio.dao;
 import com.mathew.gimnasio.configuracion.ConexionDB;
 import java.sql.*;
 
-/**
- * DATA ACCESS OBJECT (DAO) DE RECEPCIÓN
- * Actúa como el motor transaccional del "Front Desk".
- * Gestiona el Punto de Venta (POS), la telemetría en vivo del aforo físico
- * y la validación de control de acceso mediante códigos QR.
- */
 public class RecepcionDAO {
 
-    /**
-     * OBTENER TELEMETRÍA DEL DASHBOARD (AFORO Y CAJA)
-     * Construye manualmente un JSON anidado. Consolida el flujo de caja diario,
-     * la cantidad de personas actualmente dentro de las instalaciones y un
-     * feed de actividad en tiempo real.
-     */
     // ==========================================
     // 1. CARGAR DASHBOARD (AFORO Y CAJA) AISLADO POR EMPRESA
     // ==========================================
@@ -27,7 +15,7 @@ public class RecepcionDAO {
 
             // 1. Ingresos en Caja (Aislado)
             double cajaHoy = 0.0;
-            String sqlCaja = "SELECT COALESCE(SUM(monto_pagado), 0) FROM pagos WHERE DATE(fecha_pago) = CURRENT_DATE AND id_empresa = ?";
+            String sqlCaja = "SELECT COALESCE(SUM(monto_pagado), 0) FROM pagos WHERE DATE(fecha_pago) = CURRENT_DATE AND id_empresa = ? AND estado = 'APROBADO'";
             try(PreparedStatement ps = conn.prepareStatement(sqlCaja)) {
                 ps.setInt(1, idEmpresa);
                 try(ResultSet rs = ps.executeQuery()) {
@@ -35,7 +23,7 @@ public class RecepcionDAO {
                 }
             }
 
-            // 2. Personas Entrenando (Aforo actual en vivo: Aislado por la empresa del cliente)
+            // 2. Personas Entrenando
             int aforoHoy = 0;
             String sqlAforo = "SELECT COUNT(*) FROM asistencias a INNER JOIN clientes c ON a.id_cliente = c.id_cliente WHERE DATE(a.fecha_hora_ingreso) = CURRENT_DATE AND a.fecha_hora_salida IS NULL AND c.id_empresa = ?";
             try(PreparedStatement ps = conn.prepareStatement(sqlAforo)) {
@@ -50,7 +38,7 @@ public class RecepcionDAO {
                     .append("\"aforoHoy\": ").append(aforoHoy)
                     .append("},");
 
-            // 3. Actividad Reciente FÍSICA (Aislada por empresa en ambas subconsultas)
+            // 3. Actividad Reciente FÍSICA
             json.append("\"actividadReciente\": [");
             String sqlActividad =
                     "SELECT u.usuario, a.fecha_hora_ingreso AS hora_movimiento, 'Entrada' AS tipo_movimiento " +
@@ -68,7 +56,7 @@ public class RecepcionDAO {
 
             try(PreparedStatement ps = conn.prepareStatement(sqlActividad)) {
                 ps.setInt(1, idEmpresa);
-                ps.setInt(2, idEmpresa); // Se inyecta dos veces por el UNION ALL
+                ps.setInt(2, idEmpresa);
                 try(ResultSet rs = ps.executeQuery()) {
                     boolean first = true;
                     while(rs.next()) {
@@ -101,9 +89,6 @@ public class RecepcionDAO {
         return json.toString();
     }
 
-    /**
-     * NÚCLEO DE CONTROL DE ACCESO (QR SCANNER) AISLADO
-     */
     // ==========================================
     // 2. PROCESAR EL ESCÁNER QR (ENTRADA / SALIDA)
     // ==========================================
@@ -124,7 +109,6 @@ public class RecepcionDAO {
                 try { idBuscado = Integer.parseInt(paramLimpio); } catch (Exception e) {}
             }
 
-            // Búsqueda flexible pero SECUTIRIZADA POR EMPRESA
             String sqlUser = "SELECT u.id_usuario, c.id_cliente, u.usuario, u.activo " +
                     "FROM usuarios u " +
                     "LEFT JOIN clientes c ON u.id_usuario = c.id_usuario " +
@@ -136,7 +120,7 @@ public class RecepcionDAO {
                 ps.setString(2, paramLimpio);
                 ps.setString(3, paramLimpio);
                 ps.setInt(4, idBuscado);
-                ps.setInt(5, idEmpresa); // Filtro multi-tenant
+                ps.setInt(5, idEmpresa);
 
                 ResultSet rs = ps.executeQuery();
                 if(rs.next()) {
@@ -160,9 +144,7 @@ public class RecepcionDAO {
             }
 
             if (idAsistencia != -1) {
-                // ==========================================
-                // CASO A: MARCAR SALIDA (SE QUEDA IGUAL)
-                // ==========================================
+                // MARCAR SALIDA
                 String sqlOut = "UPDATE asistencias SET fecha_hora_salida = CURRENT_TIMESTAMP WHERE id_asistencia = ?";
                 try(PreparedStatement ps = conn.prepareStatement(sqlOut)) {
                     ps.setInt(1, idAsistencia);
@@ -174,9 +156,7 @@ public class RecepcionDAO {
 
                 return "{\"status\":\"ok\", \"tipo\":\"Salida\", \"mensaje\":\"¡Hasta pronto, " + nombreUsuario + "! Salida a las " + horaFmt + "\"}";
             } else {
-                // ==========================================
-                // REGLA DE NEGOCIO: 1 ACCESO (ENTRADA/SALIDA) POR DÍA
-                // ==========================================
+                // REGLA DE NEGOCIO: 1 ACCESO POR DÍA
                 String sqlValidacionDia = "SELECT COUNT(*) FROM asistencias WHERE id_cliente = ? AND DATE(fecha_hora_ingreso) = CURRENT_DATE";
 
                 try(PreparedStatement psValidacion = conn.prepareStatement(sqlValidacionDia)) {
@@ -184,14 +164,11 @@ public class RecepcionDAO {
                     ResultSet rsValidacion = psValidacion.executeQuery();
 
                     if (rsValidacion.next() && rsValidacion.getInt(1) > 0) {
-                        // Si el conteo es mayor a 0, ya consumió su pase diario. Se rechaza la entrada.
                         return "{\"status\":\"error\", \"mensaje\":\"Acceso Denegado: Ya utilizaste tu acceso del día de hoy. ¡Vuelve mañana!\"}";
                     }
                 }
 
-                // ==========================================
-                // CASO B: MARCAR ENTRADA (SI PASÓ LA VALIDACIÓN)
-                // ==========================================
+                // MARCAR ENTRADA
                 String codigoUnico = identificador.trim() + "_" + System.currentTimeMillis();
 
                 String sqlIn = "INSERT INTO asistencias (id_cliente, fecha_hora_ingreso, dispositivo_qr, codigo_validado) VALUES (?, CURRENT_TIMESTAMP, 'Escáner Recepción', ?)";
@@ -208,20 +185,11 @@ public class RecepcionDAO {
             }
 
         } catch (Exception e) {
-            String errorMsg = e.getMessage();
-            if(errorMsg != null) {
-                errorMsg = errorMsg.replace("\"", "'").replace("\n", " ");
-            } else {
-                errorMsg = "Error desconocido";
-            }
-            System.out.println("Error procesando QR: " + errorMsg);
+            String errorMsg = e.getMessage() != null ? e.getMessage().replace("\"", "'").replace("\n", " ") : "Error desconocido";
             return "{\"status\":\"error\", \"mensaje\":\"Error BD: " + errorMsg + "\"}";
         }
     }
 
-    /**
-     * OBTENER DIRECTORIO EN VIVO DE SOCIOS AISLADO
-     */
     // ==========================================
     // 3. OBTENER DIRECTORIO DE SOCIOS (CON ESTADO EN VIVO)
     // ==========================================
@@ -238,7 +206,7 @@ public class RecepcionDAO {
         try (Connection conn = ConexionDB.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
-            ps.setInt(1, idEmpresa); // Filtramos por empresa
+            ps.setInt(1, idEmpresa);
 
             try (ResultSet rs = ps.executeQuery()) {
                 boolean first = true;
@@ -262,36 +230,29 @@ public class RecepcionDAO {
         return json.toString();
     }
 
-    /**
-     * OBTENER HISTORIAL DE VENTAS (CAJA CHICA) AISLADO
-     */
     // ==========================================
     // 4. OBTENER HISTORIAL DE CAJA (PAGOS)
     // ==========================================
     public String obtenerHistorialPagosJSON(int idEmpresa) {
         StringBuilder json = new StringBuilder("[");
-
         String sql = "SELECT p.id_pago, u.usuario, p.monto_pagado, p.fecha_pago, p.metodo_pago, p.id_membresia " +
                 "FROM pagos p " +
                 "INNER JOIN clientes c ON p.id_cliente = c.id_cliente " +
                 "INNER JOIN usuarios u ON c.id_usuario = u.id_usuario " +
-                "WHERE p.id_empresa = ? " +
+                "WHERE p.id_empresa = ? AND p.estado = 'APROBADO' " +
                 "ORDER BY p.fecha_pago DESC LIMIT 50";
 
         try (Connection conn = ConexionDB.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
-            ps.setInt(1, idEmpresa); // Filtramos los cobros por gimnasio
+            ps.setInt(1, idEmpresa);
 
             try (ResultSet rs = ps.executeQuery()) {
                 boolean first = true;
                 while(rs.next()) {
                     if(!first) json.append(",");
-
                     String fechaLimpia = rs.getString("fecha_pago");
-                    if(fechaLimpia != null && fechaLimpia.length() > 19) {
-                        fechaLimpia = fechaLimpia.substring(0, 19);
-                    }
+                    if(fechaLimpia != null && fechaLimpia.length() > 19) fechaLimpia = fechaLimpia.substring(0, 19);
 
                     json.append("{")
                             .append("\"id_pago\":").append(rs.getInt("id_pago")).append(",")
@@ -304,50 +265,62 @@ public class RecepcionDAO {
                     first = false;
                 }
             }
-        } catch (Exception e) {
-            System.out.println("Error Historial Pagos: " + e.getMessage());
-        }
+        } catch (Exception e) { e.printStackTrace(); }
         json.append("]");
         return json.toString();
     }
 
-    /**
-     * PROCESAMIENTO DE PUNTO DE VENTA (POS) AISLADO
-     */
     // ==========================================
-    // 5. REGISTRAR UN NUEVO PAGO
+    // 5. REGISTRAR UN NUEVO PAGO (CON ESTADO APROBADO AUTOMÁTICO EN CAJA)
     // ==========================================
     public boolean registrarPago(int idUsuarioEnviado, int idPlan, double monto, String metodo, int idEmpresa) {
-        String sql = "INSERT INTO pagos (id_cliente, id_membresia, monto_pagado, metodo_pago, fecha_pago, id_empresa) " +
-                "SELECT id_cliente, ?, ?, ?, CURRENT_TIMESTAMP, ? " +
+        // Los pagos recibidos físicamente en recepción nacen como APROBADOS
+        String sql = "INSERT INTO pagos (id_cliente, id_membresia, monto_pagado, metodo_pago, fecha_pago, id_empresa, estado) " +
+                "SELECT id_cliente, ?, ?, ?, CURRENT_TIMESTAMP, ?, 'APROBADO' " +
                 "FROM clientes WHERE id_usuario = ?";
 
-        try (Connection conn = ConexionDB.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+        Connection conn = null;
+        try {
+            conn = ConexionDB.getConnection();
+            conn.setAutoCommit(false);
 
-            ps.setInt(1, idPlan);
-            ps.setDouble(2, monto);
-            ps.setString(3, metodo);
-            ps.setInt(4, idEmpresa); // Registramos a qué empresa va el dinero
-            ps.setInt(5, idUsuarioEnviado);
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setInt(1, idPlan);
+                ps.setDouble(2, monto);
+                ps.setString(3, metodo);
+                ps.setInt(4, idEmpresa);
+                ps.setInt(5, idUsuarioEnviado);
 
-            return ps.executeUpdate() > 0;
-
+                int filasAfectadas = ps.executeUpdate();
+                if (filasAfectadas > 0) {
+                    // Al ser un pago en mostrador, se le activa la membresía automáticamente
+                    String sqlCliente = "UPDATE clientes SET id_membresia = ?, fecha_vencimiento = CURRENT_DATE + INTERVAL '1 month', cancelado = FALSE " +
+                            "WHERE id_usuario = ?";
+                    try (PreparedStatement ps2 = conn.prepareStatement(sqlCliente)) {
+                        ps2.setInt(1, idPlan);
+                        ps2.setInt(2, idUsuarioEnviado);
+                        ps2.executeUpdate();
+                    }
+                    conn.commit();
+                    return true;
+                }
+                conn.rollback();
+                return false;
+            }
         } catch (Exception e) {
-            System.out.println("Error Registrando Pago en BD: " + e.getMessage());
+            try { if (conn != null) conn.rollback(); } catch (Exception ex) {}
+            e.printStackTrace();
             return false;
+        } finally {
+            try { if (conn != null) { conn.setAutoCommit(true); conn.close(); } } catch (Exception e) {}
         }
     }
+
     // ==========================================
     // 6. OBTENER PAGOS PENDIENTES DE REVISIÓN
     // ==========================================
-    // ==========================================
-    // OBTENER TODOS LOS PAGOS (PENDIENTES, APROBADOS Y RECHAZADOS)
-    // ==========================================
     public String obtenerPagosPendientesJSON(int idEmpresa) {
         StringBuilder json = new StringBuilder("[");
-
-        // Eliminamos "AND p.estado = 'PENDIENTE'" y añadimos un ORDER BY inteligente
         String sql = "SELECT p.id_pago, u.usuario AS nombre_cliente, p.monto_pagado, " +
                 "to_char(p.fecha_pago, 'YYYY-MM-DD HH24:MI') as fecha_formateada, " +
                 "p.id_membresia, p.referencia_comprobante, p.foto_comprobante, p.motivo, p.estado " +
@@ -357,7 +330,7 @@ public class RecepcionDAO {
                 "WHERE p.id_empresa = ? " +
                 "ORDER BY " +
                 "  CASE WHEN p.estado = 'PENDIENTE' THEN 1 ELSE 2 END, " +
-                "  p.fecha_pago DESC"; // Los pendientes salen arriba, luego el resto ordenados por fecha
+                "  p.fecha_pago DESC";
 
         try (Connection conn = ConexionDB.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -366,7 +339,6 @@ public class RecepcionDAO {
                 boolean first = true;
                 while (rs.next()) {
                     if (!first) json.append(",");
-
                     json.append("{")
                             .append("\"id_pago\":").append(rs.getInt("id_pago")).append(",")
                             .append("\"nombre_cliente\":\"").append(rs.getString("nombre_cliente")).append("\",")
@@ -374,9 +346,9 @@ public class RecepcionDAO {
                             .append("\"fecha_pago\":\"").append(rs.getString("fecha_formateada")).append("\",")
                             .append("\"id_membresia\":").append(rs.getInt("id_membresia")).append(",")
                             .append("\"estado\":\"").append(rs.getString("estado")).append("\",")
-                            .append("\"numero_referencia\":\"").append(rs.getString("referencia_comprobante")).append("\",")
+                            .append("\"numero_referencia\":\"").append(rs.getString("referencia_comprobante") != null ? rs.getString("referencia_comprobante") : "").append("\",")
                             .append("\"motivo\":\"").append(rs.getString("motivo") != null ? rs.getString("motivo") : "Renovación").append("\",")
-                            .append("\"foto_comprobante\":\"").append(rs.getString("foto_comprobante")).append("\"")
+                            .append("\"foto_comprobante\":\"").append(rs.getString("foto_comprobante") != null ? rs.getString("foto_comprobante") : "").append("\"")
                             .append("}");
                     first = false;
                 }
@@ -393,9 +365,8 @@ public class RecepcionDAO {
         Connection conn = null;
         try {
             conn = ConexionDB.getConnection();
-            conn.setAutoCommit(false); // Iniciamos transacción
+            conn.setAutoCommit(false);
 
-            // 1. Actualizar el estado del pago
             String sqlPago = "UPDATE pagos SET estado = ? WHERE id_pago = ?";
             try (PreparedStatement ps1 = conn.prepareStatement(sqlPago)) {
                 ps1.setString(1, estado);
@@ -403,7 +374,6 @@ public class RecepcionDAO {
                 ps1.executeUpdate();
             }
 
-            // 2. Si es APROBADO, actualizar la membresía del cliente
             if ("APROBADO".equals(estado)) {
                 String sqlCliente = "UPDATE clientes SET id_membresia = ?, fecha_vencimiento = CURRENT_DATE + INTERVAL '1 month', cancelado = FALSE " +
                         "WHERE id_cliente = (SELECT id_cliente FROM pagos WHERE id_pago = ?)";
@@ -414,7 +384,7 @@ public class RecepcionDAO {
                 }
             }
 
-            conn.commit(); // Confirmamos los cambios
+            conn.commit();
             return true;
         } catch (Exception e) {
             try { if (conn != null) conn.rollback(); } catch (Exception ex) {}
@@ -423,5 +393,48 @@ public class RecepcionDAO {
         } finally {
             try { if (conn != null) { conn.setAutoCommit(true); conn.close(); } } catch (Exception e) {}
         }
+    }
+
+    // ==========================================
+    // MÉTODOS DE VALIDACIÓN E INTEGRIDAD (NUEVOS)
+    // ==========================================
+
+    // Valida que el cliente exista y pertenezca a la empresa que está cobrando
+    public boolean existeUsuarioEnEmpresa(int idUsuario, int idEmpresa) {
+        String sql = "SELECT COUNT(*) FROM clientes c INNER JOIN usuarios u ON c.id_usuario = u.id_usuario WHERE u.id_usuario = ? AND u.id_empresa = ?";
+        try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, idUsuario);
+            ps.setInt(2, idEmpresa);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getInt(1) > 0;
+            }
+        } catch (SQLException e) { e.printStackTrace(); }
+        return false;
+    }
+
+    // Valida que el plan vendido realmente pertenezca a la empresa
+    public boolean existePlanEnEmpresa(int idPlan, int idEmpresa) {
+        String sql = "SELECT COUNT(*) FROM membresias WHERE id_membresia = ? AND id_empresa = ?";
+        try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, idPlan);
+            ps.setInt(2, idEmpresa);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getInt(1) > 0;
+            }
+        } catch (SQLException e) { e.printStackTrace(); }
+        return false;
+    }
+
+    // Previene que se vuelva a aprobar/rechazar un pago que ya no está pendiente
+    public boolean esPagoPendienteValido(int idPago, int idEmpresa) {
+        String sql = "SELECT COUNT(*) FROM pagos WHERE id_pago = ? AND id_empresa = ? AND estado = 'PENDIENTE'";
+        try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, idPago);
+            ps.setInt(2, idEmpresa);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getInt(1) > 0;
+            }
+        } catch (SQLException e) { e.printStackTrace(); }
+        return false;
     }
 }
