@@ -1,11 +1,13 @@
 package com.mathew.gimnasio.dao;
 
 import com.mathew.gimnasio.configuracion.ConexionDB;
+import com.mathew.gimnasio.modelos.Empresa;
 import com.mathew.gimnasio.util.SecurityUtil;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 
 public class SuperAdminDAO {
 
@@ -64,15 +66,19 @@ public class SuperAdminDAO {
         return json.toString();
     }
 
-    public boolean guardarEmpresa(String nombre, String ruc, String telefono, String direccion) {
+    // Método robusto para insertar usando el objeto Empresa
+    public boolean registrarEmpresa(Empresa empresa) {
         String sql = "INSERT INTO empresas (nombre_empresa, ruc_nit, telefono, direccion, activo, fecha_registro) VALUES (?, ?, ?, ?, TRUE, CURRENT_TIMESTAMP)";
         try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, nombre);
-            ps.setString(2, ruc);
-            ps.setString(3, telefono);
-            ps.setString(4, direccion);
+            ps.setString(1, empresa.getNombre().trim());
+            ps.setString(2, empresa.getRuc().trim());
+            ps.setString(3, empresa.getTelefono().trim());
+            ps.setString(4, empresa.getDireccion().trim());
             return ps.executeUpdate() > 0;
-        } catch (Exception e) { return false; }
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 
     public boolean editarEmpresa(int id, String nombre, String ruc, String telefono, String direccion) {
@@ -94,6 +100,64 @@ public class SuperAdminDAO {
             ps.setInt(2, id);
             return ps.executeUpdate() > 0;
         } catch (Exception e) { return false; }
+    }
+
+    // ==========================================
+    // VALIDACIONES DE NEGOCIO PARA EMPRESAS
+    // ==========================================
+    public boolean existeRuc(String ruc) {
+        String sql = "SELECT COUNT(*) FROM empresas WHERE ruc_nit = ?";
+        try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, ruc.trim());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getInt(1) > 0;
+            }
+        } catch (SQLException e) { e.printStackTrace(); }
+        return false;
+    }
+
+    public boolean existeNombreEmpresa(String nombre) {
+        String sql = "SELECT COUNT(*) FROM empresas WHERE LOWER(nombre_empresa) = LOWER(?)";
+        try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, nombre.trim());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getInt(1) > 0;
+            }
+        } catch (SQLException e) { e.printStackTrace(); }
+        return false;
+    }
+
+    public boolean existeTelefono(String telefono) {
+        String sql = "SELECT COUNT(*) FROM empresas WHERE telefono = ?";
+        try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, telefono.trim());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getInt(1) > 0;
+            }
+        } catch (SQLException e) { e.printStackTrace(); }
+        return false;
+    }
+
+    public boolean existeDireccion(String direccion) {
+        String sql = "SELECT COUNT(*) FROM empresas WHERE LOWER(direccion) = LOWER(?)";
+        try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, direccion.trim());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getInt(1) > 0;
+            }
+        } catch (SQLException e) { e.printStackTrace(); }
+        return false;
+    }
+
+    public boolean existeCorreo(String correo) {
+        String sql = "SELECT COUNT(*) FROM usuarios WHERE LOWER(correo) = LOWER(?)";
+        try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, correo.trim());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getInt(1) > 0;
+            }
+        } catch (SQLException e) { e.printStackTrace(); }
+        return false;
     }
 
     // ==========================================
@@ -125,7 +189,6 @@ public class SuperAdminDAO {
     }
 
     public boolean guardarAdmin(int idEmpresa, String nombre, String apellido, String usuario, String contrasena) {
-        // SOLUCIÓN MISTERIO 1: Insertamos solo en Usuarios. Adiós al choque de base de datos.
         String sql = "INSERT INTO usuarios (id_rol, id_empresa, usuario, contrasena, nombre, apellido, activo) VALUES (1, ?, ?, ?, ?, ?, TRUE)";
         try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, idEmpresa);
@@ -138,7 +201,6 @@ public class SuperAdminDAO {
     }
 
     public boolean editarAdmin(int idUsuario, int idEmpresa, String nombre, String apellido, String usuario, String contrasena) {
-        // Si no envía contraseña, solo editamos los datos
         boolean cambiarPass = (contrasena != null && !contrasena.trim().isEmpty());
         String sql = cambiarPass ?
                 "UPDATE usuarios SET id_empresa=?, nombre=?, apellido=?, usuario=?, contrasena=? WHERE id_usuario=?" :

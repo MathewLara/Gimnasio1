@@ -1,6 +1,8 @@
 package com.mathew.gimnasio.controladores;
 
 import com.mathew.gimnasio.dao.SuperAdminDAO;
+import com.mathew.gimnasio.modelos.Empresa;
+import com.mathew.gimnasio.util.ValidadorEcuador;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -29,10 +31,68 @@ public class SuperAdminController {
     @Path("/empresas")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    public Response crearEmpresa(Map<String, String> data) {
-        boolean ok = dao.guardarEmpresa(data.get("nombre"), data.get("ruc"), data.get("telefono"), data.get("direccion"));
-        if(ok) return Response.ok("{\"mensaje\":\"Empresa creada\"}").build();
-        return Response.status(500).entity("{\"mensaje\":\"Error (RUC duplicado)\"}").build();
+    public Response crearEmpresa(Empresa empresa) {
+
+        // 1. Validación de campos nulos o vacíos (excluimos correo porque la tabla empresas no lo tiene)
+        if (empresa.getNombre() == null || empresa.getNombre().trim().isEmpty() ||
+                empresa.getRuc() == null || empresa.getRuc().trim().isEmpty() ||
+                empresa.getTelefono() == null || empresa.getTelefono().trim().isEmpty() ||
+                empresa.getDireccion() == null || empresa.getDireccion().trim().isEmpty()) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity("{\"mensaje\": \"Todos los campos (nombre, ruc, teléfono, dirección) son obligatorios.\"}")
+                    .build();
+        }
+
+        // 2. Validación estricta de Formatos usando ValidadorEcuador
+        if (!ValidadorEcuador.esRucValido(empresa.getRuc())) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity("{\"mensaje\": \"El RUC ingresado no tiene un formato válido para Ecuador.\"}")
+                    .build();
+        }
+
+        if (!ValidadorEcuador.esTelefonoValido(empresa.getTelefono())) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity("{\"mensaje\": \"El teléfono debe contener solo números válidos (Ej: 09XXXXXXXX o 02XXXXXXX).\"}")
+                    .build();
+        }
+
+        // 3. Validación de Reglas de Negocio (Duplicados en Base de Datos)
+        if (dao.existeRuc(empresa.getRuc())) {
+            return Response.status(Response.Status.CONFLICT)
+                    .entity("{\"mensaje\": \"Este RUC ya se encuentra registrado en el sistema.\"}")
+                    .build();
+        }
+
+        if (dao.existeNombreEmpresa(empresa.getNombre())) {
+            return Response.status(Response.Status.CONFLICT)
+                    .entity("{\"mensaje\": \"Ya existe un gimnasio registrado con ese nombre exacto.\"}")
+                    .build();
+        }
+
+        if (dao.existeTelefono(empresa.getTelefono())) {
+            return Response.status(Response.Status.CONFLICT)
+                    .entity("{\"mensaje\": \"Este número de teléfono ya está asociado a otra empresa.\"}")
+                    .build();
+        }
+
+        if (dao.existeDireccion(empresa.getDireccion())) {
+            return Response.status(Response.Status.CONFLICT)
+                    .entity("{\"mensaje\": \"Ya existe una empresa registrada en esta dirección exacta.\"}")
+                    .build();
+        }
+
+        // 4. Si pasa todas las validaciones, guardamos en base de datos
+        boolean exito = dao.registrarEmpresa(empresa);
+
+        if (exito) {
+            return Response.status(Response.Status.CREATED)
+                    .entity("{\"mensaje\": \"Empresa registrada exitosamente.\"}")
+                    .build();
+        } else {
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity("{\"mensaje\": \"Ocurrió un error interno al guardar la empresa en la base de datos.\"}")
+                    .build();
+        }
     }
 
     @PUT
