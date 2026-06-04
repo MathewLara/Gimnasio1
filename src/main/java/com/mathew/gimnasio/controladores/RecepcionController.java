@@ -115,4 +115,33 @@ public class RecepcionController {
             return Response.status(500).entity("{\"status\":\"error\", \"mensaje\":\"Error interno: " + e.getMessage() + "\"}").build();
         }
     }
+    @GET
+    @Path("/pagos-pendientes")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response getPagosPendientes(@QueryParam("idEmpresa") int idEmpresa) {
+        if (idEmpresa == 0) return Response.status(400).entity("{\"mensaje\":\"Falta idEmpresa\"}").build();
+        String jsonRespuesta = dao.obtenerPagosPendientesJSON(idEmpresa);
+        return Response.ok(jsonRespuesta).build();
+    }
+
+    @POST
+    @Path("/verificar-pago")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response verificarPagoMembresia(java.util.Map<String, Object> payload) {
+        try {
+            int idPago = Integer.parseInt(payload.get("pagoId").toString());
+            String estado = payload.get("estado").toString();
+            int idMembresia = Integer.parseInt(payload.get("membresiaId").toString());
+
+            boolean exito = dao.verificarPago(idPago, estado, idMembresia);
+
+            if(exito) {
+                return Response.ok("{\"status\":\"ok\"}").build();
+            }
+            return Response.status(500).entity("{\"status\":\"error\"}").build();
+        } catch(Exception e) {
+            return Response.status(400).entity("{\"status\":\"error\"}").build();
+        }
+    }
 }
