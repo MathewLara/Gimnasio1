@@ -105,4 +105,17 @@ public class AdminController {
         adminDAO.cambiarEstadoPlan(id, activo);
         return Response.ok("{\"mensaje\":\"Estado actualizado\"}").build();
     }
+    /**
+     * ENDPOINT PÚBLICO: TRAER PLANES ACTIVOS AL INDEX
+     * Este endpoint no requiere idEmpresa ni token de sesión
+     */
+    @GET
+    @Path("/planes-activos")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response getPlanesActivos() {
+        // Llamamos al método que acabamos de crear en el DAO
+        String jsonRespuesta = adminDAO.obtenerPlanesActivosJSON();
+        return Response.ok(jsonRespuesta).build();
+    }
+
 }

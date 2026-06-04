@@ -185,4 +185,43 @@ public class AdminDAO {
             return ps.executeUpdate() > 0;
         } catch (Exception e) { e.printStackTrace(); return false; }
     }
+    // ==========================================
+    // 5. OBTENER PLANES ACTIVOS PARA EL INDEX PÚBLICO
+    // ==========================================
+    public String obtenerPlanesActivosJSON() {
+        StringBuilder json = new StringBuilder("[");
+        // Traemos solo los planes activos, ordenados por precio de menor a mayor
+        String sql = "SELECT id_membresia, nombre, precio, descripcion FROM membresias WHERE activo = true ORDER BY precio ASC";
+
+        try (Connection conn = ConexionDB.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+
+            boolean first = true;
+            while (rs.next()) {
+                if (!first) json.append(",");
+
+                // Limpiamos la descripción de saltos de línea para evitar que rompa el JSON
+                String desc = rs.getString("descripcion");
+                if (desc != null) {
+                    desc = desc.replace("\n", " ").replace("\r", "");
+                } else {
+                    desc = "";
+                }
+
+                json.append("{")
+                        .append("\"id\":").append(rs.getInt("id_membresia")).append(",")
+                        .append("\"nombre\":\"").append(rs.getString("nombre")).append("\",")
+                        .append("\"precio\":").append(rs.getDouble("precio")).append(",")
+                        .append("\"descripcion\":\"").append(desc).append("\"")
+                        .append("}");
+                first = false;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        json.append("]");
+        return json.toString();
+    }
+
 }
