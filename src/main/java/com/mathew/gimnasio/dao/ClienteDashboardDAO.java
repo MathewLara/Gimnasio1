@@ -185,4 +185,25 @@ public class ClienteDashboardDAO {
         }
         return false;
     }
+    // ==========================================
+    // REGISTRAR COMPROBANTE DE PAGO (PENDIENTE)
+    // ==========================================
+    public boolean registrarPagoPendiente(int idCliente, int idMembresia, double monto, int idEmpresa, String base64Imagen) {
+        String sql = "INSERT INTO pagos (id_cliente, id_membresia, monto_pagado, estado, referencia_comprobante, fecha_pago, id_empresa) " +
+                "VALUES (?, ?, ?, 'PENDIENTE', ?, CURRENT_TIMESTAMP, ?)";
+        try (Connection conn = ConexionDB.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, idCliente);
+            ps.setInt(2, idMembresia);
+            ps.setDouble(3, monto);
+            ps.setString(4, base64Imagen); // Guardamos la imagen convertida en texto
+            ps.setInt(5, idEmpresa);
+
+            return ps.executeUpdate() > 0;
+        } catch (Exception e) {
+            System.out.println("Error guardando comprobante: " + e.getMessage());
+        }
+        return false;
+    }
 }

@@ -338,4 +338,82 @@ public class RecepcionDAO {
             return false;
         }
     }
+    // ==========================================
+    // 6. OBTENER PAGOS PENDIENTES DE REVISIÓN
+    // ==========================================
+    public String obtenerPagosPendientesJSON(int idEmpresa) {
+        StringBuilder json = new StringBuilder("[");
+        String sql = "SELECT p.id_pago, u.usuario AS nombre_cliente, p.monto_pagado, " +
+                "p.fecha_pago, p.id_membresia, p.referencia_comprobante, p.estado " +
+                "FROM pagos p " +
+                "INNER JOIN clientes c ON p.id_cliente = c.id_cliente " +
+                "INNER JOIN usuarios u ON c.id_usuario = u.id_usuario " +
+                "WHERE p.estado = 'PENDIENTE' AND p.id_empresa = ?";
+
+        try (Connection conn = ConexionDB.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, idEmpresa);
+            try (ResultSet rs = ps.executeQuery()) {
+                boolean first = true;
+                while (rs.next()) {
+                    if (!first) json.append(",");
+
+                    String fechaLimpia = rs.getString("fecha_pago");
+                    if(fechaLimpia != null && fechaLimpia.length() > 19) fechaLimpia = fechaLimpia.substring(0, 19);
+
+                    json.append("{")
+                            .append("\"id_pago\":").append(rs.getInt("id_pago")).append(",")
+                            .append("\"nombre_cliente\":\"").append(rs.getString("nombre_cliente")).append("\",")
+                            .append("\"monto_pagado\":").append(rs.getDouble("monto_pagado")).append(",")
+                            .append("\"fecha_pago\":\"").append(fechaLimpia).append("\",")
+                            .append("\"id_membresia\":").append(rs.getInt("id_membresia")).append(",")
+                            .append("\"estado\":\"").append(rs.getString("estado")).append("\",")
+                            .append("\"referencia_comprobante\":\"").append(rs.getString("referencia_comprobante")).append("\"")
+                            .append("}");
+                    first = false;
+                }
+            }
+        } catch (Exception e) { e.printStackTrace(); }
+        json.append("]");
+        return json.toString();
+    }
+
+    // ==========================================
+    // 7. VERIFICAR PAGO (APROBAR Y ACTIVAR MEMBRESÍA O RECHAZAR)
+    // ==========================================
+    public boolean verificarPago(int idPago, String estado, int idMembresia) {
+        Connection conn = null;
+        try {
+            conn = ConexionDB.getConnection();
+            conn.setAutoCommit(false); // Iniciamos transacción
+
+            // 1. Actualizar el estado del pago
+            String sqlPago = "UPDATE pagos SET estado = ? WHERE id_pago = ?";
+            try (PreparedStatement ps1 = conn.prepareStatement(sqlPago)) {
+                ps1.setString(1, estado);
+                ps1.setInt(2, idPago);
+                ps1.executeUpdate();
+            }
+
+            // 2. Si es APROBADO, actualizar la membresía del cliente
+            if ("APROBADO".equals(estado)) {
+                String sqlCliente = "UPDATE clientes SET id_membresia = ?, fecha_vencimiento = CURRENT_DATE + INTERVAL '1 month', cancelado = FALSE " +
+                        "WHERE id_cliente = (SELECT id_cliente FROM pagos WHERE id_pago = ?)";
+                try (PreparedStatement ps2 = conn.prepareStatement(sqlCliente)) {
+                    ps2.setInt(1, idMembresia);
+                    ps2.setInt(2, idPago);
+                    ps2.executeUpdate();
+                }
+            }
+
+            conn.commit(); // Confirmamos los cambios
+            return true;
+        } catch (Exception e) {
+            try { if (conn != null) conn.rollback(); } catch (Exception ex) {}
+            e.printStackTrace();
+            return false;
+        } finally {
+            try { if (conn != null) { conn.setAutoCommit(true); conn.close(); } } catch (Exception e) {}
+        }
+    }
 }

@@ -83,4 +83,29 @@ public class ClienteController {
             return Response.status(500).entity("{\"mensaje\": \"Error al cancelar la suscripción\"}").build();
         }
     }
+    /**
+     * Endpoint para recibir la foto del comprobante en Base64
+     */
+    @POST
+    @Path("/pago-membresia")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response subirComprobante(java.util.Map<String, Object> payload) {
+        try {
+            int idCliente = Integer.parseInt(payload.get("id_cliente").toString());
+            int idMembresia = Integer.parseInt(payload.get("id_membresia").toString());
+            double monto = Double.parseDouble(payload.get("monto_pagado").toString());
+            int idEmpresa = Integer.parseInt(payload.get("id_empresa").toString());
+            String comprobanteBase64 = payload.get("comprobante").toString();
+
+            boolean exito = dao.registrarPagoPendiente(idCliente, idMembresia, monto, idEmpresa, comprobanteBase64);
+
+            if(exito) {
+                return Response.ok("{\"status\":\"ok\", \"mensaje\":\"Comprobante recibido\"}").build();
+            }
+            return Response.status(500).entity("{\"status\":\"error\", \"mensaje\":\"Error al guardar el comprobante\"}").build();
+        } catch(Exception e) {
+            return Response.status(400).entity("{\"status\":\"error\", \"mensaje\":\"Datos inválidos\"}").build();
+        }
+    }
 }

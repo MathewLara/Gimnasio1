@@ -108,11 +108,13 @@ public class VentaDAO {
     // ==========================================
     // PAGO DE MEMBRESÍAS
     // ==========================================
-    public String registrarPagoMembresia(int idUsuario, int idMembresia, double monto, int dias) {
+    // ==========================================
+    // PAGO DE MEMBRESÍAS (SOLO DEJA EL PAGO EN PENDIENTE)
+    // ==========================================
+    public String registrarPagoMembresia(int idUsuario, int idMembresia, double monto, String comprobanteBase64, int idEmpresa) {
         Connection conn = null;
         try {
             conn = ConexionDB.getConnection();
-            conn.setAutoCommit(false); // Iniciar transacción
 
             // 1. Obtener el id_cliente
             int idCliente = -1;
@@ -120,34 +122,28 @@ public class VentaDAO {
                 ps.setInt(1, idUsuario);
                 ResultSet rs = ps.executeQuery();
                 if (rs.next()) idCliente = rs.getInt("id_cliente");
-                else throw new SQLException("El usuario logueado no tiene un perfil en la tabla 'clientes'.");
+                else return "Error: El usuario logueado no tiene perfil de cliente.";
             }
 
-            // 2. Registrar el pago (¡CORREGIDO! Usamos id_membresia y metodo_pago como lo pide tu SQL)
-            try (PreparedStatement ps = conn.prepareStatement("INSERT INTO pagos (id_membresia, monto_pagado, metodo_pago, fecha_pago) VALUES (?, ?, 'TARJETA WEB', CURRENT_TIMESTAMP)")) {
-                ps.setInt(1, idMembresia);
-                ps.setDouble(2, monto);
+            // 2. Insertar el pago como PENDIENTE y guardar la imagen (SIN ACTUALIZAR LOS DÍAS)
+            String sqlInsert = "INSERT INTO pagos (id_cliente, id_membresia, monto_pagado, metodo_pago, fecha_pago, estado, referencia_comprobante, id_empresa) " +
+                    "VALUES (?, ?, ?, 'TRANSFERENCIA', CURRENT_TIMESTAMP, 'PENDIENTE', ?, ?)";
+            try (PreparedStatement ps = conn.prepareStatement(sqlInsert)) {
+                ps.setInt(1, idCliente);
+                ps.setInt(2, idMembresia);
+                ps.setDouble(3, monto);
+                ps.setString(4, comprobanteBase64); // Se guarda la foto Base64
+                ps.setInt(5, idEmpresa);
                 ps.executeUpdate();
             }
 
-            // 3. Actualizar la membresía sumando días automáticamente
-            String sqlUpdate = "UPDATE clientes SET id_membresia = ?, fecha_vencimiento = COALESCE(fecha_vencimiento, CURRENT_DATE) + ? WHERE id_cliente = ?";
-            try (PreparedStatement ps = conn.prepareStatement(sqlUpdate)) {
-                ps.setInt(1, idMembresia);
-                ps.setInt(2, dias); // Sumamos los días como un número entero normal
-                ps.setInt(3, idCliente);
-                ps.executeUpdate();
-            }
-
-            conn.commit();
-            return "OK"; // Todo salió perfecto
+            return "OK"; // Terminamos. Recepción se encargará del resto.
 
         } catch (Exception e) {
             e.printStackTrace();
-            try { if (conn != null) conn.rollback(); } catch (SQLException ex) {}
             return "Error BD: " + e.getMessage();
         } finally {
-            try { if (conn != null) { conn.setAutoCommit(true); conn.close(); } } catch (Exception e) {}
+            try { if (conn != null) conn.close(); } catch (Exception e) {}
         }
     }
     // ==========================================

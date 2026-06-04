@@ -63,19 +63,29 @@ public class VentaController {
     @Path("/membresia")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    public Response pagarMembresia(PagoMembresiaDTO req) {
-        if (req.getIdUsuario() == 0 || req.getMonto() <= 0) {
-            return Response.status(400).entity("{\"mensaje\":\"Datos de pago inválidos\"}").build();
-        }
+    public Response pagarMembresia(java.util.Map<String, Object> payload) {
+        try {
+            // Extraemos los datos del JSON que envía checkout.js
+            int idUsuario = Integer.parseInt(payload.get("idUsuario").toString());
+            int idMembresia = Integer.parseInt(payload.get("idMembresia").toString());
+            double monto = Double.parseDouble(payload.get("monto").toString());
+            int idEmpresa = Integer.parseInt(payload.get("idEmpresa").toString());
+            String comprobanteBase64 = payload.get("comprobante").toString(); // La imagen
 
-        // AQUÍ ESTÁ LA MAGIA: Cambiamos 'boolean exito' por 'String resultado'
-        String resultado = ventaDAO.registrarPagoMembresia(req.getIdUsuario(), req.getIdMembresia(), req.getMonto(), req.getDias());
+            if (idUsuario == 0 || monto <= 0) {
+                return Response.status(400).entity("{\"mensaje\":\"Datos de pago inválidos\"}").build();
+            }
 
-        if (resultado.equals("OK")) {
-            return Response.ok("{\"mensaje\":\"¡Pago exitoso y membresía renovada!\"}").build();
-        } else {
-            // Mandamos el error de la base de datos directo a la web
-            return Response.status(500).entity("{\"mensaje\":\"" + resultado + "\"}").build();
+            // Llamamos al DAO modificado
+            String resultado = ventaDAO.registrarPagoMembresia(idUsuario, idMembresia, monto, comprobanteBase64, idEmpresa);
+
+            if (resultado.equals("OK")) {
+                return Response.ok("{\"mensaje\":\"¡Pago en revisión! Espera la validación de recepción.\"}").build();
+            } else {
+                return Response.status(500).entity("{\"mensaje\":\"" + resultado + "\"}").build();
+            }
+        } catch(Exception e) {
+            return Response.status(400).entity("{\"mensaje\":\"Faltan datos o la foto en el formulario\"}").build();
         }
     }
     /**
