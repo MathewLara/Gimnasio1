@@ -7,149 +7,144 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
-/**
- * CONTROLADOR DE ENTRENADORES
- * * Esta clase es el centro de mando para los profesores del gimnasio.
- * Permite que los entrenadores gestionen sus perfiles, creen ejercicios para los alumnos
- * y organicen su agenda de trabajo desde la aplicación.
- */
 @Path("/entrenadores")
 public class EntrenadorController {
 
-    // El DAO es el asistente que va a la base de datos a traer o guardar la información
     private EntrenadorDAO dao = new EntrenadorDAO();
 
-    /**
-     * VER TABLERO PRINCIPAL
-     * Carga el resumen del entrenador: cuántos alumnos tiene, sus estadísticas
-     * y las rutinas que ha diseñado.
-     * URL: GET /api/entrenadores/{id}/dashboard?idEmpresa=X
-     */
     @GET
     @Path("/{idUsuario}/dashboard")
     @Produces(MediaType.APPLICATION_JSON)
     public Response getDashboard(@PathParam("idUsuario") int id, @QueryParam("idEmpresa") int idEmpresa) {
-        // Le pedimos al asistente (DAO) los datos del profesor logueado filtrando por su empresa
+        if (id <= 0 || idEmpresa <= 0) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("{\"mensaje\": \"Parámetros de acceso inválidos.\"}").build();
+        }
         EntrenadorDashboardDTO dto = dao.obtenerDashboard(id, idEmpresa);
         if (dto != null) {
-            return Response.ok(dto).build(); // Si todo sale bien, mandamos los datos en formato JSON
+            return Response.ok(dto).build();
         }
-        return Response.status(Response.Status.NOT_FOUND).build(); // Si no existe el profesor, avisamos
+        return Response.status(Response.Status.NOT_FOUND).build();
     }
 
-    /**
-     * CREAR UNA NUEVA RUTINA DESDE LA BIBLIOTECA
-     * URL: POST /api/entrenadores/{id}/crearRutina
-     */
     @POST
     @Path("/{idUsuario}/crearRutina")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public Response crearRutina(@PathParam("idUsuario") int idUsuario, @QueryParam("idEmpresa") int idEmpresa, NuevaRutinaDTO datos) {
+        // 1. Validaciones estructurales para evitar NullPointerException
+        if (datos == null) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("{\"mensaje\": \"La solicitud está vacía.\"}").build();
+        }
+        if (datos.getNombreRutina() == null || datos.getNombreRutina().trim().isEmpty()) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("{\"mensaje\": \"El nombre de la rutina es obligatorio.\"}").build();
+        }
+        if (datos.getIdsEjercicios() == null || datos.getIdsEjercicios().isEmpty()) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("{\"mensaje\": \"Debe seleccionar al menos un ejercicio para la rutina.\"}").build();
+        }
+
+        // 2. Regla de Negocio: No duplicar nombres de rutinas en la biblioteca del mismo entrenador
+        if (dao.existeNombreRutina(datos.getNombreRutina(), idUsuario, idEmpresa, 0)) {
+            return Response.status(Response.Status.CONFLICT).entity("{\"mensaje\": \"Ya tienes una rutina guardada con este mismo nombre.\"}").build();
+        }
+
         boolean exito = dao.crearRutina(idUsuario, idEmpresa, datos);
-        if (exito) return Response.ok("{\"mensaje\": \"Rutina guardada con éxito\"}").build();
-        return Response.status(500).entity("{\"mensaje\": \"Error al guardar la rutina\"}").build();
+        if (exito) return Response.ok("{\"mensaje\": \"Rutina guardada con éxito.\"}").build();
+        return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"mensaje\": \"Error interno al guardar la rutina.\"}").build();
     }
 
-    /**
-     * ACTUALIZAR UNA RUTINA EXISTENTE
-     * URL: PUT /api/entrenadores/rutinas/{id}
-     */
     @PUT
     @Path("/rutinas/{idRutina}")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    public Response modificarRutina(@PathParam("idRutina") int idRutina, @QueryParam("idEmpresa") int idEmpresa, NuevaRutinaDTO datos) {
+    public Response modificarRutina(@PathParam("idRutina") int idRutina, @QueryParam("idUsuario") int idUsuario, @QueryParam("idEmpresa") int idEmpresa, NuevaRutinaDTO datos) {
+        if (idRutina <= 0) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("{\"mensaje\": \"ID de rutina inválido.\"}").build();
+        }
+        if (datos == null || datos.getNombreRutina() == null || datos.getNombreRutina().trim().isEmpty()) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("{\"mensaje\": \"El nombre de la rutina no puede estar vacío.\"}").build();
+        }
+        if (datos.getIdsEjercicios() == null || datos.getIdsEjercicios().isEmpty()) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("{\"mensaje\": \"La rutina no puede quedarse sin ejercicios.\"}").build();
+        }
+
+        // Validar duplicidad excluyendo la rutina actual
+        if (dao.existeNombreRutina(datos.getNombreRutina(), idUsuario, idEmpresa, idRutina)) {
+            return Response.status(Response.Status.CONFLICT).entity("{\"mensaje\": \"Otro plan ya usa este nombre en tu biblioteca.\"}").build();
+        }
+
         boolean exito = dao.modificarRutina(idRutina, idEmpresa, datos);
-        if (exito) return Response.ok("{\"mensaje\": \"Rutina editada con éxito\"}").build();
-        return Response.status(500).entity("{\"mensaje\": \"Error al editar la rutina\"}").build();
+        if (exito) return Response.ok("{\"mensaje\": \"Rutina editada con éxito.\"}").build();
+        return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"mensaje\": \"Error al editar la rutina en la base de datos.\"}").build();
     }
 
-    /**
-     * ELIMINAR (DESACTIVAR) UNA RUTINA - LA MANDA A LA PAPELERA
-     * URL: DELETE /api/entrenadores/rutinas/{id}
-     */
     @DELETE
     @Path("/rutinas/{idRutina}")
     @Produces(MediaType.APPLICATION_JSON)
     public Response borrarRutina(@PathParam("idRutina") int idRutina) {
+        if (idRutina <= 0) return Response.status(Response.Status.BAD_REQUEST).entity("{\"mensaje\": \"ID inválido.\"}").build();
         boolean exito = dao.desactivarRutina(idRutina);
-        if (exito) return Response.ok("{\"mensaje\": \"Rutina movida a la papelera\"}").build();
-        return Response.status(500).entity("{\"mensaje\": \"Error al eliminar la rutina\"}").build();
+        if (exito) return Response.ok("{\"mensaje\": \"Rutina movida a la papelera.\"}").build();
+        return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"mensaje\": \"Error al eliminar la rutina.\"}").build();
     }
 
-    /**
-     * RESTAURAR UNA RUTINA DE LA PAPELERA
-     * URL: PUT /api/entrenadores/rutinas/{id}/reactivar
-     */
     @PUT
     @Path("/rutinas/{idRutina}/reactivar")
     @Produces(MediaType.APPLICATION_JSON)
     public Response restaurarRutina(@PathParam("idRutina") int idRutina, @QueryParam("idEmpresa") int idEmpresa) {
+        if (idRutina <= 0 || idEmpresa <= 0) return Response.status(Response.Status.BAD_REQUEST).entity("{\"mensaje\": \"Datos de reactivación incompletos.\"}").build();
         boolean exito = dao.reactivarRutina(idRutina, idEmpresa);
-        if (exito) return Response.ok("{\"mensaje\": \"Rutina restaurada con éxito\"}").build();
-        return Response.status(500).entity("{\"mensaje\": \"Error al restaurar la rutina\"}").build();
+        if (exito) return Response.ok("{\"mensaje\": \"Rutina restaurada con éxito.\"}").build();
+        return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"mensaje\": \"Error al restaurar la rutina.\"}").build();
     }
 
-    /**
-     * VINCULAR UN NUEVO ALUMNO O ASIGNARLE MÁS RUTINAS
-     * URL: POST /api/entrenadores/{id}/alumnos
-     */
     @POST
     @Path("/{idUsuario}/alumnos")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public Response vincularAlumno(@PathParam("idUsuario") int idUsuario, com.mathew.gimnasio.modelos.AsignarAlumnoDTO datos) {
-        // CORRECCIÓN: Ahora atrapa el boolean correctamente
+        if (datos == null || datos.getIdCliente() <= 0) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("{\"mensaje\": \"Debe seleccionar un alumno válido.\"}").build();
+        }
+
         boolean exito = dao.vincularAlumno(idUsuario, datos);
         if (exito) {
             return Response.ok("{\"mensaje\": \"Rutina asignada exitosamente al alumno.\"}").build();
         } else {
-            // Si devuelve false, asumimos que es por la regla de negocio del límite de 10
-            return Response.status(400).entity("{\"mensaje\": \"Límite de rutinas alcanzado (Máx 10). Ocurrió un error en la asignación.\"}").build();
+            return Response.status(Response.Status.CONFLICT).entity("{\"mensaje\": \"Límite de rutinas alcanzado (Máx 10) u ocurrió un error de asignación.\"}").build();
         }
     }
 
-    /**
-     * EDITAR LA RUTINA DE UN ALUMNO (Acumulativo)
-     * URL: PUT /api/entrenadores/{id}/alumnos
-     */
     @PUT
     @Path("/{idUsuario}/alumnos")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public Response actualizarAlumno(@PathParam("idUsuario") int idUsuario, com.mathew.gimnasio.modelos.AsignarAlumnoDTO datos) {
-        // CORRECCIÓN: Ahora atrapa el boolean correctamente
+        if (datos == null || datos.getIdCliente() <= 0) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("{\"mensaje\": \"Debe enviar los datos del alumno.\"}").build();
+        }
         boolean exito = dao.vincularAlumno(idUsuario, datos);
         if (exito) {
             return Response.ok("{\"mensaje\": \"Nueva rutina sumada al alumno.\"}").build();
         } else {
-            return Response.status(400).entity("{\"mensaje\": \"No se pudo sumar la rutina. Es posible que el alumno ya tenga el límite de 10 activas.\"}").build();
+            return Response.status(Response.Status.CONFLICT).entity("{\"mensaje\": \"No se pudo sumar la rutina. Límite de 10 activas alcanzado.\"}").build();
         }
     }
 
-    /**
-     * DESVINCULAR A UN ALUMNO
-     * URL: DELETE /api/entrenadores/{id}/alumnos/{idCliente}
-     */
     @DELETE
     @Path("/{idUsuario}/alumnos/{idCliente}")
     @Produces(MediaType.APPLICATION_JSON)
     public Response desvincularAlumno(@PathParam("idUsuario") int idUsuario, @PathParam("idCliente") int idCliente) {
+        if (idCliente <= 0) return Response.status(Response.Status.BAD_REQUEST).entity("{\"mensaje\": \"ID de alumno inválido.\"}").build();
         boolean exito = dao.desvincularAlumno(idUsuario, idCliente);
-        if (exito) return Response.ok("{\"mensaje\": \"Alumno desvinculado de tu cartera\"}").build();
-        return Response.status(500).entity("{\"mensaje\": \"Error al desvincular al alumno\"}").build();
+        if (exito) return Response.ok("{\"mensaje\": \"Alumno desvinculado de tu cartera.\"}").build();
+        return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"mensaje\": \"Error al desvincular al alumno.\"}").build();
     }
 
-    /**
-     * CONSULTAR AGENDA DEL DÍA (Alumnos citados hoy)
-     * URL: GET /api/entrenadores/{id}/agenda?idEmpresa=X
-     */
     @GET
     @Path("/{idUsuario}/agenda")
     @Produces(MediaType.APPLICATION_JSON)
     public Response obtenerAgenda(@PathParam("idUsuario") int id, @QueryParam("idEmpresa") int idEmpresa) {
-        // Obtenemos la agenda del día filtrando también por el ID de la empresa
+        if (id <= 0 || idEmpresa <= 0) return Response.status(Response.Status.BAD_REQUEST).entity("{\"mensaje\": \"Faltan credenciales.\"}").build();
         return Response.ok(dao.obtenerAgendaHoy(id, idEmpresa)).build();
     }
 
@@ -168,17 +163,25 @@ public class EntrenadorController {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public Response crearEjercicio(java.util.Map<String, Object> data) {
-        try {
-            String nombre = String.valueOf(data.get("nombre"));
-            String grupo = String.valueOf(data.get("grupo"));
-
-            boolean ok = dao.guardarEjercicio(nombre, grupo);
-            if(ok) return Response.ok("{\"mensaje\":\"Ejercicio creado\"}").build();
-            return Response.status(500).entity("{\"mensaje\":\"Error al crear en base de datos\"}").build();
-        } catch (Exception e) {
-            e.printStackTrace();
-            return Response.status(400).entity("{\"mensaje\":\"Error de formato: " + e.getMessage() + "\"}").build();
+        if (data == null || !data.containsKey("nombre") || !data.containsKey("grupo")) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("{\"mensaje\": \"Faltan datos obligatorios (nombre, grupo).\"}").build();
         }
+
+        String nombre = String.valueOf(data.get("nombre")).trim();
+        String grupo = String.valueOf(data.get("grupo")).trim();
+
+        if (nombre.isEmpty() || grupo.isEmpty()) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("{\"mensaje\": \"El nombre y el grupo muscular no pueden estar vacíos.\"}").build();
+        }
+
+        // Validación contra duplicados para mantener el catálogo limpio
+        if (dao.existeNombreEjercicio(nombre, 0)) {
+            return Response.status(Response.Status.CONFLICT).entity("{\"mensaje\": \"Ya existe un ejercicio registrado con ese nombre exacto.\"}").build();
+        }
+
+        boolean ok = dao.guardarEjercicio(nombre, grupo);
+        if(ok) return Response.status(Response.Status.CREATED).entity("{\"mensaje\":\"Ejercicio creado\"}").build();
+        return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"mensaje\":\"Error al crear en base de datos\"}").build();
     }
 
     @PUT
@@ -186,23 +189,32 @@ public class EntrenadorController {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public Response editarEjercicio(@PathParam("id") int id, java.util.Map<String, Object> data) {
-        try {
-            String nombre = String.valueOf(data.get("nombre"));
-            String grupo = String.valueOf(data.get("grupo"));
-
-            boolean ok = dao.editarEjercicio(id, nombre, grupo);
-            if(ok) return Response.ok("{\"mensaje\":\"Ejercicio actualizado\"}").build();
-            return Response.status(500).entity("{\"mensaje\":\"Error al actualizar en base de datos\"}").build();
-        } catch (Exception e) {
-            e.printStackTrace();
-            return Response.status(400).entity("{\"mensaje\":\"Error de formato: " + e.getMessage() + "\"}").build();
+        if (id <= 0) return Response.status(Response.Status.BAD_REQUEST).entity("{\"mensaje\": \"ID inválido.\"}").build();
+        if (data == null || !data.containsKey("nombre") || !data.containsKey("grupo")) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("{\"mensaje\": \"Faltan datos obligatorios para editar.\"}").build();
         }
+
+        String nombre = String.valueOf(data.get("nombre")).trim();
+        String grupo = String.valueOf(data.get("grupo")).trim();
+
+        if (nombre.isEmpty() || grupo.isEmpty()) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("{\"mensaje\": \"El nombre no puede estar vacío.\"}").build();
+        }
+
+        if (dao.existeNombreEjercicio(nombre, id)) {
+            return Response.status(Response.Status.CONFLICT).entity("{\"mensaje\": \"Otro ejercicio ya utiliza este nombre en el catálogo.\"}").build();
+        }
+
+        boolean ok = dao.editarEjercicio(id, nombre, grupo);
+        if(ok) return Response.ok("{\"mensaje\":\"Ejercicio actualizado\"}").build();
+        return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"mensaje\":\"Error al actualizar en base de datos\"}").build();
     }
 
     @PUT
     @Path("/ejercicios/{id}/estado")
     @Produces(MediaType.APPLICATION_JSON)
     public Response cambiarEstadoEjercicio(@PathParam("id") int id, @QueryParam("activo") boolean activo) {
+        if (id <= 0) return Response.status(Response.Status.BAD_REQUEST).entity("{\"mensaje\": \"ID inválido.\"}").build();
         dao.cambiarEstadoEjercicio(id, activo);
         return Response.ok("{\"mensaje\":\"Estado del ejercicio actualizado\"}").build();
     }
