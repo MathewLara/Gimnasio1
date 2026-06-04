@@ -343,8 +343,10 @@ public class RecepcionDAO {
     // ==========================================
     public String obtenerPagosPendientesJSON(int idEmpresa) {
         StringBuilder json = new StringBuilder("[");
+        // Formateamos la hora para que salga bonita (Ej: 2026-06-04 14:30) y sacamos los nuevos campos
         String sql = "SELECT p.id_pago, u.usuario AS nombre_cliente, p.monto_pagado, " +
-                "p.fecha_pago, p.id_membresia, p.referencia_comprobante, p.estado " +
+                "to_char(p.fecha_pago, 'YYYY-MM-DD HH24:MI') as fecha_formateada, " +
+                "p.id_membresia, p.referencia_comprobante, p.foto_comprobante, p.motivo, p.estado " +
                 "FROM pagos p " +
                 "INNER JOIN clientes c ON p.id_cliente = c.id_cliente " +
                 "INNER JOIN usuarios u ON c.id_usuario = u.id_usuario " +
@@ -358,17 +360,16 @@ public class RecepcionDAO {
                 while (rs.next()) {
                     if (!first) json.append(",");
 
-                    String fechaLimpia = rs.getString("fecha_pago");
-                    if(fechaLimpia != null && fechaLimpia.length() > 19) fechaLimpia = fechaLimpia.substring(0, 19);
-
                     json.append("{")
                             .append("\"id_pago\":").append(rs.getInt("id_pago")).append(",")
                             .append("\"nombre_cliente\":\"").append(rs.getString("nombre_cliente")).append("\",")
                             .append("\"monto_pagado\":").append(rs.getDouble("monto_pagado")).append(",")
-                            .append("\"fecha_pago\":\"").append(fechaLimpia).append("\",")
+                            .append("\"fecha_pago\":\"").append(rs.getString("fecha_formateada")).append("\",")
                             .append("\"id_membresia\":").append(rs.getInt("id_membresia")).append(",")
                             .append("\"estado\":\"").append(rs.getString("estado")).append("\",")
-                            .append("\"referencia_comprobante\":\"").append(rs.getString("referencia_comprobante")).append("\"")
+                            .append("\"numero_referencia\":\"").append(rs.getString("referencia_comprobante")).append("\",")
+                            .append("\"motivo\":\"").append(rs.getString("motivo") != null ? rs.getString("motivo") : "Renovación").append("\",")
+                            .append("\"foto_comprobante\":\"").append(rs.getString("foto_comprobante")).append("\"")
                             .append("}");
                     first = false;
                 }

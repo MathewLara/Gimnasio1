@@ -65,19 +65,22 @@ public class VentaController {
     @Produces(MediaType.APPLICATION_JSON)
     public Response pagarMembresia(java.util.Map<String, Object> payload) {
         try {
-            // Extraemos los datos del JSON que envía checkout.js
             int idUsuario = Integer.parseInt(payload.get("idUsuario").toString());
             int idMembresia = Integer.parseInt(payload.get("idMembresia").toString());
             double monto = Double.parseDouble(payload.get("monto").toString());
             int idEmpresa = Integer.parseInt(payload.get("idEmpresa").toString());
-            String comprobanteBase64 = payload.get("comprobante").toString(); // La imagen
+
+            // Recibimos los 3 datos nuevos del comprobante
+            String comprobanteFoto = payload.get("comprobanteFoto").toString();
+            String numeroReferencia = payload.containsKey("numeroReferencia") ? payload.get("numeroReferencia").toString() : "S/N";
+            String motivo = payload.containsKey("motivo") ? payload.get("motivo").toString() : "Renovación";
 
             if (idUsuario == 0 || monto <= 0) {
                 return Response.status(400).entity("{\"mensaje\":\"Datos de pago inválidos\"}").build();
             }
 
-            // Llamamos al DAO modificado
-            String resultado = ventaDAO.registrarPagoMembresia(idUsuario, idMembresia, monto, comprobanteBase64, idEmpresa);
+            // Pasamos todo al DAO
+            String resultado = ventaDAO.registrarPagoMembresia(idUsuario, idMembresia, monto, comprobanteFoto, numeroReferencia, motivo, idEmpresa);
 
             if (resultado.equals("OK")) {
                 return Response.ok("{\"mensaje\":\"¡Pago en revisión! Espera la validación de recepción.\"}").build();

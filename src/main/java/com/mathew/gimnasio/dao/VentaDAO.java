@@ -111,12 +111,11 @@ public class VentaDAO {
     // ==========================================
     // PAGO DE MEMBRESÍAS (SOLO DEJA EL PAGO EN PENDIENTE)
     // ==========================================
-    public String registrarPagoMembresia(int idUsuario, int idMembresia, double monto, String comprobanteBase64, int idEmpresa) {
+    public String registrarPagoMembresia(int idUsuario, int idMembresia, double monto, String comprobanteFoto, String numeroReferencia, String motivo, int idEmpresa) {
         Connection conn = null;
         try {
             conn = ConexionDB.getConnection();
 
-            // 1. Obtener el id_cliente
             int idCliente = -1;
             try (PreparedStatement ps = conn.prepareStatement("SELECT id_cliente FROM clientes WHERE id_usuario = ?")) {
                 ps.setInt(1, idUsuario);
@@ -125,20 +124,22 @@ public class VentaDAO {
                 else return "Error: El usuario logueado no tiene perfil de cliente.";
             }
 
-            // 2. Insertar el pago como PENDIENTE y guardar la imagen (SIN ACTUALIZAR LOS DÍAS)
-            String sqlInsert = "INSERT INTO pagos (id_cliente, id_membresia, monto_pagado, metodo_pago, fecha_pago, estado, referencia_comprobante, id_empresa) " +
-                    "VALUES (?, ?, ?, 'TRANSFERENCIA', CURRENT_TIMESTAMP, 'PENDIENTE', ?, ?)";
+            // AJUSTE DE HORA ECUADOR: CURRENT_TIMESTAMP - INTERVAL '5 hours'
+            String sqlInsert = "INSERT INTO pagos (id_cliente, id_membresia, monto_pagado, metodo_pago, fecha_pago, estado, referencia_comprobante, foto_comprobante, motivo, id_empresa) " +
+                    "VALUES (?, ?, ?, 'TRANSFERENCIA', CURRENT_TIMESTAMP - INTERVAL '5 hours', 'PENDIENTE', ?, ?, ?, ?)";
+
             try (PreparedStatement ps = conn.prepareStatement(sqlInsert)) {
                 ps.setInt(1, idCliente);
                 ps.setInt(2, idMembresia);
                 ps.setDouble(3, monto);
-                ps.setString(4, comprobanteBase64); // Se guarda la foto Base64
-                ps.setInt(5, idEmpresa);
+                ps.setString(4, numeroReferencia); // El número que digitó
+                ps.setString(5, comprobanteFoto);  // La foto gigante
+                ps.setString(6, motivo);           // El motivo
+                ps.setInt(7, idEmpresa);
                 ps.executeUpdate();
             }
 
-            return "OK"; // Terminamos. Recepción se encargará del resto.
-
+            return "OK";
         } catch (Exception e) {
             e.printStackTrace();
             return "Error BD: " + e.getMessage();
