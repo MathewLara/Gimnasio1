@@ -5,107 +5,111 @@ import com.mathew.gimnasio.modelos.ResumenClienteDTO;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-import jakarta.ws.rs.POST;
-import jakarta.ws.rs.PUT;
 
-/**
- * CONTROLADOR DE CLIENTES
- * * Clase encargada de exponer los recursos REST para la entidad Cliente.
- * Actúa como la capa de comunicación entre las peticiones HTTP del frontend
- * y la lógica de acceso a datos del backend.
- */
 @Path("/clientes")
 public class ClienteController {
+
     private ClienteDashboardDAO dao = new ClienteDashboardDAO();
 
-    /**
-     * Recupera el conjunto de datos necesarios para renderizar el Dashboard del cliente.
-     * * El recurso es accesible mediante el metodo HTTP GET. Retorna un objeto JSON
-     * que contiene el perfil, asistencias y ejercicios actuales del usuario.
-     * * URL: GET /api/clientes/{idUsuario}/dashboard?idEmpresa=X
-     * * @param id Identificador de usuario extraído de la ruta de la URL.
-     * @return Response Objeto de respuesta HTTP con el DTO serializado en formato JSON.
-     */
     @GET
     @Path("/{idUsuario}/dashboard")
     @Produces(MediaType.APPLICATION_JSON)
-    // SE AÑADIÓ idEmpresa
     public Response dashboard(@PathParam("idUsuario") int id, @QueryParam("idEmpresa") int idEmpresa) {
-        // Delegación de la lógica de negocio al componente DAO especializado (pasando idEmpresa)
+        // 1. Validación de identificadores
+        if (id <= 0 || idEmpresa <= 0) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("{\"mensaje\":\"Parámetros de acceso inválidos o nulos.\"}").build();
+        }
+
         ResumenClienteDTO datos = dao.obtenerInfoDashboard(id, idEmpresa);
-        // Respuesta exitosa (HTTP 200) con el cuerpo del mensaje poblado
         if (datos != null) return Response.ok(datos).build();
-        // Respuesta de error controlado (HTTP 404) cuando el recurso no existe
-        return Response.status(404).entity("{\"mensaje\":\"Cliente no encontrado\"}").build();
+
+        return Response.status(Response.Status.NOT_FOUND).entity("{\"mensaje\":\"Cliente no encontrado o no pertenece a esta sucursal.\"}").build();
     }
 
-    /**
-     * Procesa la notificación de finalización de una sesión de entrenamiento.
-     * * Este recurso utiliza el metodo HTTP POST para realizar una escritura persistente
-     * en el historial de actividades del gimnasio.
-     * * URL: POST /api/clientes/{idUsuario}/completar?idEmpresa=X
-     * * @param id Identificador del usuario que finaliza la actividad.
-     * @return Response Confirmación de la operación o aviso de registro existente.
-     */
     @POST
     @Path("/{idUsuario}/completar")
     @Produces(MediaType.APPLICATION_JSON)
-    // SE AÑADIÓ idEmpresa
     public Response completarRutina(@PathParam("idUsuario") int id, @QueryParam("idEmpresa") int idEmpresa) {
-        // Ejecución de la persistencia de datos mediante el DAO (pasando idEmpresa)
-        boolean exito = dao.registrarTerminoRutina(id, idEmpresa);
+        if (id <= 0 || idEmpresa <= 0) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("{\"mensaje\":\"Identificadores de usuario o empresa inválidos.\"}").build();
+        }
 
+        boolean exito = dao.registrarTerminoRutina(id, idEmpresa);
         if (exito) {
-            // Confirmación de inserción correcta en la base de datos
-            return Response.ok("{\"mensaje\": \"Entrenamiento registrado exitosamente\"}").build();
+            return Response.ok("{\"mensaje\": \"Entrenamiento registrado exitosamente.\"}").build();
         } else {
-            // Si devuelve false, asumimos que ya estaba registrado hoy, pero respondemos OK
-            // para que el cliente vea el botón verde y no se preocupe.
-            return Response.ok("{\"mensaje\": \"Ya estaba registrado hoy\"}").build();
+            return Response.ok("{\"mensaje\": \"Ya estabas registrado hoy. ¡Buen trabajo!\"}").build();
         }
     }
 
-    /**
-     * Procesa la cancelación de la suscripción del cliente.
-     * URL: PUT /api/clientes/{idUsuario}/cancelar?idEmpresa=X
-     */
     @PUT
     @Path("/{idUsuario}/cancelar")
     @Produces(MediaType.APPLICATION_JSON)
-    // SE AÑADIÓ idEmpresa
     public Response cancelarSuscripcion(@PathParam("idUsuario") int id, @QueryParam("idEmpresa") int idEmpresa) {
-        // Pasando idEmpresa por seguridad
-        boolean exito = dao.cancelarSuscripcion(id, idEmpresa);
+        if (id <= 0 || idEmpresa <= 0) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("{\"mensaje\":\"Datos inválidos para cancelar la suscripción.\"}").build();
+        }
 
+        boolean exito = dao.cancelarSuscripcion(id, idEmpresa);
         if (exito) {
-            return Response.ok("{\"mensaje\": \"Suscripción cancelada permanentemente\"}").build();
+            return Response.ok("{\"mensaje\": \"Suscripción cancelada permanentemente.\"}").build();
         } else {
-            return Response.status(500).entity("{\"mensaje\": \"Error al cancelar la suscripción\"}").build();
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"mensaje\": \"Error interno al procesar la cancelación.\"}").build();
         }
     }
-    /**
-     * Endpoint para recibir la foto del comprobante en Base64
-     */
+
     @POST
     @Path("/pago-membresia")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public Response subirComprobante(java.util.Map<String, Object> payload) {
+        // 1. Validar que la solicitud contenga todos los datos (NullPointerException Safe)
+        if (payload == null || !payload.containsKey("id_cliente") || !payload.containsKey("id_membresia") ||
+                !payload.containsKey("monto_pagado") || !payload.containsKey("id_empresa") || !payload.containsKey("comprobante")) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("{\"mensaje\":\"Faltan datos obligatorios en el formulario de pago.\"}").build();
+        }
+
         try {
             int idCliente = Integer.parseInt(payload.get("id_cliente").toString());
             int idMembresia = Integer.parseInt(payload.get("id_membresia").toString());
             double monto = Double.parseDouble(payload.get("monto_pagado").toString());
             int idEmpresa = Integer.parseInt(payload.get("id_empresa").toString());
-            String comprobanteBase64 = payload.get("comprobante").toString();
+            String comprobanteBase64 = payload.get("comprobante").toString().trim();
 
+            // 2. Validaciones numéricas lógicas
+            if (idCliente <= 0 || idMembresia <= 0 || idEmpresa <= 0) {
+                return Response.status(Response.Status.BAD_REQUEST).entity("{\"mensaje\":\"Identificadores de pago inválidos.\"}").build();
+            }
+            if (monto <= 0) {
+                return Response.status(Response.Status.BAD_REQUEST).entity("{\"mensaje\":\"El monto de pago no puede ser cero o negativo.\"}").build();
+            }
+
+            // 3. Validación de cadena/letras de la imagen: Evita strings vacíos o demasiado cortos para ser una imagen real
+            if (comprobanteBase64.isEmpty() || comprobanteBase64.length() < 100) {
+                return Response.status(Response.Status.BAD_REQUEST).entity("{\"mensaje\":\"El archivo subido no es una imagen válida o está vacío.\"}").build();
+            }
+
+            // 4. Reglas de Negocio Estrictas: Integridad y Anti-Spam
+            if (!dao.existeUsuarioEnEmpresa(idCliente, idEmpresa)) {
+                return Response.status(Response.Status.CONFLICT).entity("{\"mensaje\":\"Violación de seguridad: El cliente no pertenece a esta sucursal.\"}").build();
+            }
+            if (!dao.existeMembresiaEnEmpresa(idMembresia, idEmpresa)) {
+                return Response.status(Response.Status.CONFLICT).entity("{\"mensaje\":\"El plan seleccionado no existe o no está disponible en este gimnasio.\"}").build();
+            }
+            if (dao.tienePagoPendiente(idCliente, idEmpresa)) {
+                return Response.status(Response.Status.CONFLICT).entity("{\"mensaje\":\"Ya tienes un comprobante en revisión. Por favor espera a que recepción lo procese antes de enviar otro.\"}").build();
+            }
+
+            // 5. Proceder con el guardado en base de datos
             boolean exito = dao.registrarPagoPendiente(idCliente, idMembresia, monto, idEmpresa, comprobanteBase64);
 
             if(exito) {
-                return Response.ok("{\"status\":\"ok\", \"mensaje\":\"Comprobante recibido\"}").build();
+                return Response.ok("{\"mensaje\":\"Comprobante recibido y en proceso de revisión.\"}").build();
             }
-            return Response.status(500).entity("{\"status\":\"error\", \"mensaje\":\"Error al guardar el comprobante\"}").build();
-        } catch(Exception e) {
-            return Response.status(400).entity("{\"status\":\"error\", \"mensaje\":\"Datos inválidos\"}").build();
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"mensaje\":\"Ocurrió un error en nuestros servidores al guardar la imagen.\"}").build();
+
+        } catch(NumberFormatException e) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("{\"mensaje\":\"El formato de los números de pago o los IDs es incorrecto.\"}").build();
         }
     }
 }
