@@ -124,7 +124,7 @@ public class AdminDAO {
     }
 
     // ==========================================
-    // 4. GESTIÓN DE PLANES / MEMBRESÍAS (CORREGIDO)
+    // 4. GESTIÓN DE PLANES / MEMBRESÍAS
     // ==========================================
     public String obtenerPlanesJSON(int idEmpresa) {
         StringBuilder json = new StringBuilder("[");
@@ -154,9 +154,9 @@ public class AdminDAO {
     public boolean guardarPlan(String nombre, double precio, String descripcion, int idEmpresa) {
         String sql = "INSERT INTO membresias (nombre, precio, descripcion, id_empresa, activo) VALUES (?, ?, ?, ?, TRUE)";
         try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, nombre);
+            ps.setString(1, nombre.trim());
             ps.setDouble(2, precio);
-            ps.setString(3, descripcion);
+            ps.setString(3, descripcion.trim());
             ps.setInt(4, idEmpresa);
             return ps.executeUpdate() > 0;
         } catch (Exception e) {
@@ -168,9 +168,9 @@ public class AdminDAO {
     public boolean editarPlan(int id, String nombre, double precio, String descripcion, int idEmpresa) {
         String sql = "UPDATE membresias SET nombre=?, precio=?, descripcion=? WHERE id_membresia=? AND id_empresa=?";
         try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, nombre);
+            ps.setString(1, nombre.trim());
             ps.setDouble(2, precio);
-            ps.setString(3, descripcion);
+            ps.setString(3, descripcion.trim());
             ps.setInt(4, id);
             ps.setInt(5, idEmpresa);
             return ps.executeUpdate() > 0;
@@ -185,12 +185,12 @@ public class AdminDAO {
             return ps.executeUpdate() > 0;
         } catch (Exception e) { e.printStackTrace(); return false; }
     }
+
     // ==========================================
     // 5. OBTENER PLANES ACTIVOS PARA EL INDEX PÚBLICO
     // ==========================================
     public String obtenerPlanesActivosJSON() {
         StringBuilder json = new StringBuilder("[");
-        // Traemos solo los planes activos, ordenados por precio de menor a mayor
         String sql = "SELECT id_membresia, nombre, precio, descripcion FROM membresias WHERE activo = true ORDER BY precio ASC";
 
         try (Connection conn = ConexionDB.getConnection();
@@ -200,14 +200,9 @@ public class AdminDAO {
             boolean first = true;
             while (rs.next()) {
                 if (!first) json.append(",");
-
-                // Limpiamos la descripción de saltos de línea para evitar que rompa el JSON
                 String desc = rs.getString("descripcion");
-                if (desc != null) {
-                    desc = desc.replace("\n", " ").replace("\r", "");
-                } else {
-                    desc = "";
-                }
+                if (desc != null) desc = desc.replace("\n", " ").replace("\r", "");
+                else desc = "";
 
                 json.append("{")
                         .append("\"id\":").append(rs.getInt("id_membresia")).append(",")
@@ -217,11 +212,36 @@ public class AdminDAO {
                         .append("}");
                 first = false;
             }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        } catch (Exception e) { e.printStackTrace(); }
         json.append("]");
         return json.toString();
     }
 
+    // ==========================================
+    // REGLAS DE NEGOCIO PARA PLANES (NUEVO)
+    // ==========================================
+    public boolean existeNombrePlan(String nombre, int idEmpresa) {
+        String sql = "SELECT COUNT(*) FROM membresias WHERE LOWER(nombre) = LOWER(?) AND id_empresa = ?";
+        try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, nombre.trim());
+            ps.setInt(2, idEmpresa);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getInt(1) > 0;
+            }
+        } catch (SQLException e) { e.printStackTrace(); }
+        return false;
+    }
+
+    public boolean existeNombrePlanEdicion(String nombre, int idEmpresa, int idMembresia) {
+        String sql = "SELECT COUNT(*) FROM membresias WHERE LOWER(nombre) = LOWER(?) AND id_empresa = ? AND id_membresia != ?";
+        try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, nombre.trim());
+            ps.setInt(2, idEmpresa);
+            ps.setInt(3, idMembresia);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getInt(1) > 0;
+            }
+        } catch (SQLException e) { e.printStackTrace(); }
+        return false;
+    }
 }
