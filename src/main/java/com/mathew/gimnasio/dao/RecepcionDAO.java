@@ -341,16 +341,23 @@ public class RecepcionDAO {
     // ==========================================
     // 6. OBTENER PAGOS PENDIENTES DE REVISIÓN
     // ==========================================
+    // ==========================================
+    // OBTENER TODOS LOS PAGOS (PENDIENTES, APROBADOS Y RECHAZADOS)
+    // ==========================================
     public String obtenerPagosPendientesJSON(int idEmpresa) {
         StringBuilder json = new StringBuilder("[");
-        // Formateamos la hora para que salga bonita (Ej: 2026-06-04 14:30) y sacamos los nuevos campos
+
+        // Eliminamos "AND p.estado = 'PENDIENTE'" y añadimos un ORDER BY inteligente
         String sql = "SELECT p.id_pago, u.usuario AS nombre_cliente, p.monto_pagado, " +
                 "to_char(p.fecha_pago, 'YYYY-MM-DD HH24:MI') as fecha_formateada, " +
                 "p.id_membresia, p.referencia_comprobante, p.foto_comprobante, p.motivo, p.estado " +
                 "FROM pagos p " +
                 "INNER JOIN clientes c ON p.id_cliente = c.id_cliente " +
                 "INNER JOIN usuarios u ON c.id_usuario = u.id_usuario " +
-                "WHERE p.estado = 'PENDIENTE' AND p.id_empresa = ?";
+                "WHERE p.id_empresa = ? " +
+                "ORDER BY " +
+                "  CASE WHEN p.estado = 'PENDIENTE' THEN 1 ELSE 2 END, " +
+                "  p.fecha_pago DESC"; // Los pendientes salen arriba, luego el resto ordenados por fecha
 
         try (Connection conn = ConexionDB.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
