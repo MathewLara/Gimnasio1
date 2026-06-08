@@ -1,3 +1,7 @@
+/**
+ * Autor: Mathew Lara
+ * Fecha: 08/06/2026
+ */
 package com.mathew.gimnasio.dao;
 
 import com.mathew.gimnasio.configuracion.ConexionDB;
@@ -9,11 +13,27 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * DAO DEL DASHBOARD DE CLIENTES
+ * Componente especializado en la recuperación y consolidación de datos para la vista
+ * personalizada de los socios. Se encarga de procesar la telemetría del perfil,
+ * el historial de control de accesos, rutinas asignadas y comprobantes de pago.
+ */
 public class ClienteDashboardDAO {
 
     // ==========================================
     // 1. OBTENER TELEMETRÍA COMPLETA DEL SOCIO
     // ==========================================
+
+    /**
+     * OBTENER INFORMACIÓN DEL DASHBOARD
+     * Ejecuta consultas complejas y relacionales para construir un objeto DTO unificado
+     * que contiene el perfil del cliente, su estado de membresía, los últimos accesos
+     * ajustados a la zona horaria local y las rutinas de entrenamiento vigentes.
+     * Parametro idUsuario: Identificador único del cliente.
+     * Parametro idEmpresa: Identificador de la sucursal por motivos de validación.
+     * Retorna: Objeto ResumenClienteDTO con la telemetría procesada, o null si el usuario no existe.
+     */
     public ResumenClienteDTO obtenerInfoDashboard(int idUsuario, int idEmpresa) {
         ResumenClienteDTO dto = new ResumenClienteDTO();
 
@@ -122,6 +142,16 @@ public class ClienteDashboardDAO {
     // ==========================================
     // 2. REGISTRAR ENTRENAMIENTO FINALIZADO
     // ==========================================
+
+    /**
+     * MARCAR RUTINA COMO TERMINADA
+     * Inserta un registro en el historial de entrenamientos certificando que el usuario
+     * ha completado su rutina del día, utilizando una validación `NOT EXISTS` a nivel SQL
+     * para prevenir duplicidades en la misma jornada.
+     * Parametro idUsuario: Identificador del cliente.
+     * Parametro idEmpresa: Identificador de la sucursal.
+     * Retorna: Verdadero si se registró el término exitosamente, falso si ya estaba registrada.
+     */
     public boolean registrarTerminoRutina(int idUsuario, int idEmpresa) {
         try (Connection conn = ConexionDB.getConnection()) {
             String sqlInfo = "SELECT r.id_cliente, r.id_rutina FROM rutinas r JOIN clientes c ON r.id_cliente = c.id_cliente JOIN usuarios u ON c.id_usuario = u.id_usuario WHERE u.id_usuario = ? AND u.id_empresa = ? AND r.activa = TRUE";
@@ -151,6 +181,15 @@ public class ClienteDashboardDAO {
     // ==========================================
     // 3. CANCELAR SUSCRIPCIÓN (SOFT DELETE)
     // ==========================================
+
+    /**
+     * CANCELAR SUSCRIPCIÓN DEL CLIENTE
+     * Realiza una desactivación lógica (soft-delete) del cliente en el sistema,
+     * restringiendo su acceso y evitando que siga acumulando cobros automáticos.
+     * Parametro idUsuario: Identificador del cliente.
+     * Parametro idEmpresa: Identificador de la sucursal de pertenencia.
+     * Retorna: Verdadero si el estado de cancelación se aplicó exitosamente.
+     */
     public boolean cancelarSuscripcion(int idUsuario, int idEmpresa) {
         String sql = "UPDATE clientes SET cancelado = TRUE WHERE id_usuario = ? AND EXISTS (SELECT 1 FROM usuarios u WHERE u.id_usuario = clientes.id_usuario AND u.id_empresa = ?)";
         try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -164,6 +203,18 @@ public class ClienteDashboardDAO {
     // ==========================================
     // 4. REGISTRAR COMPROBANTE DE PAGO (PENDIENTE)
     // ==========================================
+
+    /**
+     * SUBIR COMPROBANTE DE TRANSFERENCIA
+     * Almacena de forma persistente la evidencia fotográfica enviada por el cliente
+     * en formato Base64, etiquetando el registro transaccional como 'PENDIENTE' para auditoría.
+     * Parametro idCliente: Identificador del socio que realiza el pago.
+     * Parametro idMembresia: Identificador del plan seleccionado.
+     * Parametro monto: Valor económico a revisar.
+     * Parametro idEmpresa: Identificador de la sucursal.
+     * Parametro base64Imagen: Cadena de texto correspondiente a la imagen del recibo.
+     * Retorna: Verdadero si la transacción se guardó correctamente en revisión.
+     */
     public boolean registrarPagoPendiente(int idCliente, int idMembresia, double monto, int idEmpresa, String base64Imagen) {
         // La validación de fecha del futuro se previene usando CURRENT_TIMESTAMP del motor de base de datos
         String sql = "INSERT INTO pagos (id_cliente, id_membresia, monto_pagado, estado, referencia_comprobante, fecha_pago, id_empresa) " +
@@ -183,7 +234,14 @@ public class ClienteDashboardDAO {
     // VALIDACIONES DE SEGURIDAD (NUEVO)
     // ==========================================
 
-    // Verifica si el cliente pertenece realmente a la empresa
+    /**
+     * VALIDAR PERTENENCIA A SUCURSAL
+     * Capa de seguridad Multi-Tenant que verifica que las solicitudes y cobros
+     * de un cliente correspondan exclusivamente a la base de datos de su gimnasio matriculado.
+     * Parametro idCliente: Identificador del socio.
+     * Parametro idEmpresa: Identificador de la sucursal actual.
+     * Retorna: Verdadero si la relación entre cliente y empresa es legítima.
+     */
     public boolean existeUsuarioEnEmpresa(int idCliente, int idEmpresa) {
         String sql = "SELECT COUNT(*) FROM clientes c INNER JOIN usuarios u ON c.id_usuario = u.id_usuario WHERE c.id_cliente = ? AND u.id_empresa = ?";
         try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -196,7 +254,14 @@ public class ClienteDashboardDAO {
         return false;
     }
 
-    // Verifica si el plan que intentan pagar pertenece realmente a la empresa
+    /**
+     * VALIDAR DISPONIBILIDAD DE MEMBRESÍA
+     * Comprueba que el plan que el usuario está intentando pagar exista,
+     * esté activo y forme parte del catálogo de su sucursal asignada.
+     * Parametro idMembresia: Identificador del plan.
+     * Parametro idEmpresa: Identificador de la sucursal.
+     * Retorna: Verdadero si el plan es elegible para compra.
+     */
     public boolean existeMembresiaEnEmpresa(int idMembresia, int idEmpresa) {
         String sql = "SELECT COUNT(*) FROM membresias WHERE id_membresia = ? AND id_empresa = ? AND activa = TRUE";
         try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -209,7 +274,14 @@ public class ClienteDashboardDAO {
         return false;
     }
 
-    // Evita que un cliente envíe 50 comprobantes mientras uno ya está siendo revisado por recepción
+    /**
+     * PREVENCIÓN DE DUPLICIDAD DE COMPROBANTES (ANTI-SPAM)
+     * Verifica en la base de datos si el usuario ya mantiene un comprobante
+     * en cola de revisión para evitar congestión en el panel de recepción.
+     * Parametro idCliente: Identificador del socio evaluado.
+     * Parametro idEmpresa: Identificador de la sucursal.
+     * Retorna: Verdadero si existe al menos un comprobante pendiente de resolución.
+     */
     public boolean tienePagoPendiente(int idCliente, int idEmpresa) {
         String sql = "SELECT COUNT(*) FROM pagos WHERE id_cliente = ? AND id_empresa = ? AND estado = 'PENDIENTE'";
         try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {

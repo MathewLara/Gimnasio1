@@ -1,3 +1,7 @@
+/**
+ * Autor: Mathew Lara
+ * Fecha: 08/06/2026
+ */
 package com.mathew.gimnasio.servicios;
 
 import jakarta.mail.*;

@@ -1,3 +1,7 @@
+/**
+ * Autor: Mathew Lara
+ * Fecha: 08/06/2026
+ */
 package com.mathew.gimnasio.controladores;
 
 import com.mathew.gimnasio.dao.ClienteDashboardDAO;
@@ -6,16 +10,29 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
+/**
+ * CONTROLADOR DE CLIENTES
+ * Centralizo y gestiono todas las interacciones que un cliente tiene en su portal personal.
+ * Incluye la recuperación de sus estadísticas (dashboard), marcado de asistencia a rutinas,
+ * gestión de su suscripción y el módulo de validación de pagos por comprobante.
+ */
 @Path("/clientes")
 public class ClienteController {
 
     private ClienteDashboardDAO dao = new ClienteDashboardDAO();
 
+    /**
+     * OBTENER DATOS DEL DASHBOARD DEL CLIENTE (GET)
+     * Recupero el resumen personalizado del cliente, como días restantes, estado de membresía y progreso.
+     * Parametro id: Identificador único del cliente extraído de la URL.
+     * Parametro idEmpresa: Identificador de la sucursal a la que pertenece.
+     * Retorna: Objeto ResumenClienteDTO con la información consolidada o un error 404 si no existe.
+     */
     @GET
     @Path("/{idUsuario}/dashboard")
     @Produces(MediaType.APPLICATION_JSON)
     public Response dashboard(@PathParam("idUsuario") int id, @QueryParam("idEmpresa") int idEmpresa) {
-        // 1. Validación de identificadores
+        // 1. Validación de identificadores para evitar consultas corruptas a la base de datos
         if (id <= 0 || idEmpresa <= 0) {
             return Response.status(Response.Status.BAD_REQUEST).entity("{\"mensaje\":\"Parámetros de acceso inválidos o nulos.\"}").build();
         }
@@ -26,6 +43,13 @@ public class ClienteController {
         return Response.status(Response.Status.NOT_FOUND).entity("{\"mensaje\":\"Cliente no encontrado o no pertenece a esta sucursal.\"}").build();
     }
 
+    /**
+     * REGISTRAR RUTINA COMPLETADA (POST)
+     * Permito al cliente marcar su entrenamiento del día como finalizado, registrando su progreso.
+     * Parametro id: Identificador del usuario.
+     * Parametro idEmpresa: Identificador de la empresa.
+     * Retorna: Confirmación de registro exitoso o aviso si ya se había registrado previamente hoy.
+     */
     @POST
     @Path("/{idUsuario}/completar")
     @Produces(MediaType.APPLICATION_JSON)
@@ -42,6 +66,13 @@ public class ClienteController {
         }
     }
 
+    /**
+     * CANCELAR SUSCRIPCIÓN (PUT)
+     * Proceso la solicitud del cliente para dar de baja su membresía actual en el sistema.
+     * Parametro id: Identificador del cliente.
+     * Parametro idEmpresa: Identificador de la sucursal.
+     * Retorna: Estado de la operación de cancelación en la base de datos.
+     */
     @PUT
     @Path("/{idUsuario}/cancelar")
     @Produces(MediaType.APPLICATION_JSON)
@@ -58,6 +89,13 @@ public class ClienteController {
         }
     }
 
+    /**
+     * SUBIR COMPROBANTE DE PAGO DE MEMBRESÍA (POST)
+     * Valido y proceso la recepción de un comprobante de transferencia bancaria (en base64)
+     * enviado por el cliente, aplicando reglas de negocio estrictas para evitar fraudes o duplicidad.
+     * Parametro payload: Mapa JSON que contiene los datos del cliente, membresía, monto y la imagen en base64.
+     * Retorna: Confirmación de recepción o mensajes de error detallados si se incumple alguna regla.
+     */
     @POST
     @Path("/pago-membresia")
     @Consumes(MediaType.APPLICATION_JSON)
@@ -89,7 +127,7 @@ public class ClienteController {
                 return Response.status(Response.Status.BAD_REQUEST).entity("{\"mensaje\":\"El archivo subido no es una imagen válida o está vacío.\"}").build();
             }
 
-            // 4. Reglas de Negocio Estrictas: Integridad y Anti-Spam
+            // 4. Reglas de Negocio Estrictas: Integridad relacional y controles Anti-Spam
             if (!dao.existeUsuarioEnEmpresa(idCliente, idEmpresa)) {
                 return Response.status(Response.Status.CONFLICT).entity("{\"mensaje\":\"Violación de seguridad: El cliente no pertenece a esta sucursal.\"}").build();
             }
@@ -100,7 +138,7 @@ public class ClienteController {
                 return Response.status(Response.Status.CONFLICT).entity("{\"mensaje\":\"Ya tienes un comprobante en revisión. Por favor espera a que recepción lo procese antes de enviar otro.\"}").build();
             }
 
-            // 5. Proceder con el guardado en base de datos
+            // 5. Proceder con el registro del pago y almacenamiento del comprobante
             boolean exito = dao.registrarPagoPendiente(idCliente, idMembresia, monto, idEmpresa, comprobanteBase64);
 
             if(exito) {

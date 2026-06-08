@@ -1,3 +1,7 @@
+/**
+ * Author: Mathew Lara
+ * Fecha: 07/06/2026
+ */
 package com.mathew.gimnasio.configuracion;
 
 import java.sql.Connection;
@@ -5,34 +9,35 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 
 /**
- * CONEXIÓN A LA BASE DE DATOS
- * Esta clase es el puente central entre nuestra aplicación Java y PostgreSQL.
- * Sigue el patrón Singleton (o de acceso estático) para proporcionar conexiones
- * cada vez que un DAO necesita guardar o consultar información.
+ * CLASE DE CONFIGURACIÓN: CONEXIÓN A LA BASE DE DATOS
+ * Esta clase actúa como el puente central de comunicación entre la aplicación Java y la base de datos PostgreSQL.
+ * Implementa un enfoque de acceso estático para proveer instancias de conexión
+ * seguras y directas cada vez que un componente DAO (Data Access Object) requiera realizar operaciones de persistencia.
  */
 public class ConexionDB {
 
-    // Credenciales y ruta de nuestra base de datos PostgreSQL en Render
+    // Constantes de conexión: Ruta, usuario y contraseña de la base de datos PostgreSQL alojada en Render
     private static final String URL = "jdbc:postgresql://dpg-d8gf2p3bc2fs73eghme0-a.ohio-postgres.render.com:5432/gimnasio_db_v4";
     private static final String USER = "gimnasio_db_v4_user";
     private static final String PASS = "pH4EZHqNNEJKwLuuS1WcdSwoPaQw5nhr";
 
     /**
-     * OBTENER CONEXIÓN
-     * Se encarga de cargar el driver de la base de datos y establecer la conexión activa.
-     * @return Un objeto Connection listo para ejecutar consultas SQL, o null si falla.
+     * METODO PRINCIPAL DE CONEXIÓN
+     * Inicializa el controlador JDBC y establece una nueva conexión con el servidor de base de datos.
+     * * Retorna:
+     * Un objeto de tipo Connection listo para ejecutar sentencias SQL. Retorna null si ocurre un fallo crítico.
      */
     public static Connection getConnection() {
         try {
-            // Registramos el driver de PostgreSQL para que Java sepa cómo comunicarse
+            // 1. Registro del driver JDBC de PostgreSQL en tiempo de ejecución
             Class.forName("org.postgresql.Driver");
 
-            // Intentamos abrir la puerta hacia la base de datos usando nuestras credenciales
+            // 2. Creación y apertura de la conexión utilizando las credenciales establecidas
             return DriverManager.getConnection(URL, USER, PASS);
 
         } catch (ClassNotFoundException | SQLException e) {
-            // Si la base de datos está apagada o la contraseña es incorrecta, mostramos el error
-            System.out.println("Error de conexión: " + e.getMessage());
+            // Captura de excepciones críticas (Driver no encontrado o credenciales/URL inválidas)
+            System.out.println("Error de conexión a la base de datos: " + e.getMessage());
             return null;
         }
     }

@@ -1,3 +1,7 @@
+/**
+ * Autor: Mathew Lara
+ * Fecha: 08/06/2026
+ */
 package com.mathew.gimnasio.controladores;
 
 import com.mathew.gimnasio.dao.UsuarioDAO;
@@ -6,40 +10,38 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.util.List;
-import java.util.Random; // Necesario para generar el código
+import java.util.Random;
 
 /**
  * CONTROLADOR DE USUARIOS
- * Esta clase funciona como el panel de control administrativo de la aplicación.
- * A diferencia del AuthController (que es para que los clientes se registren solos),
- * este controlador permite a los administradores o recepcionistas gestionar
- * directamente los registros (ver todos, editar, crear manualmente o eliminar).
+ * Gestiona las operaciones administrativas relacionadas con las cuentas de los usuarios.
+ * Permite al personal autorizado realizar operaciones CRUD (creación, lectura, actualización
+ * y eliminación) de manera directa sobre los registros del sistema.
  */
-@Path("/usuarios") // URL base: /api/usuarios
+@Path("/usuarios")
 public class UsuarioController {
 
     private UsuarioDAO dao = new UsuarioDAO();
 
     /**
-     * 1. OBTENER TODOS LOS USUARIOS (GET)
-     * Solicita al DAO la lista completa de todos los clientes y personal
-     * registrados en el gimnasio. Ideal para llenar tablas en el dashboard.
-     * @return Respuesta HTTP 200 con la lista de usuarios en formato JSON.
+     * OBTENER TODOS LOS USUARIOS (GET)
+     * Recupera la lista completa de clientes y personal registrados en el sistema
+     * para la alimentación de tablas y reportes en el panel administrativo.
+     * Retorna: Respuesta HTTP 200 con la lista de usuarios en formato JSON.
      */
     @GET
     @Produces(MediaType.APPLICATION_JSON)
     public Response listarUsuarios() {
-        // Obtenemos la lista desde la base de datos
+        // Ejecuta la consulta general a la base de datos
         List<Usuario> lista = dao.listar();
         return Response.ok(lista).build();
     }
 
     /**
-     * 2. OBTENER UN USUARIO POR ID (GET)
-     * Busca los detalles específicos de un solo usuario utilizando su código
-     * identificador único de la base de datos.
-     * @param id El número de identificación del usuario.
-     * @return El objeto Usuario en JSON, o un error 404 si el ID no existe.
+     * OBTENER UN USUARIO POR ID (GET)
+     * Recupera los detalles específicos de un usuario mediante su identificador único.
+     * Parametro id: El número de identificación del usuario en la base de datos.
+     * Retorna: El objeto Usuario en formato JSON, o un estado 404 si el registro no existe.
      */
     @GET
     @Path("/{id}")
@@ -47,7 +49,7 @@ public class UsuarioController {
     public Response obtenerUsuario(@PathParam("id") int id) {
         Usuario u = dao.obtenerPorId(id);
 
-        // Verificamos si la base de datos realmente encontró a alguien
+        // Validación de existencia del registro en la base de datos
         if (u != null) {
             return Response.ok(u).build();
         } else {
@@ -56,19 +58,20 @@ public class UsuarioController {
     }
 
     /**
-     * 3. CREAR NUEVO USUARIO (POST)
-     * Permite a un administrador crear una cuenta manualmente.
-     * Se adapta a las reglas de negocio del DAO generando un código de verificación por defecto.
-     * @param nuevoUsuario El objeto con los datos tipeados por el administrador.
-     * @return Respuesta HTTP indicando si se creó con éxito o si hubo un error.
+     * CREAR NUEVO USUARIO (POST)
+     * Facilita la creación manual de una cuenta de usuario por parte de un administrador,
+     * generando automáticamente un código de verificación temporal para cumplir
+     * con los requerimientos estructurales de la capa de datos.
+     * Parametro nuevoUsuario: El objeto estructurado con los datos ingresados en el formulario.
+     * Retorna: Confirmación HTTP indicando éxito en la creación o error por duplicidad.
      */
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public Response crearUsuario(Usuario nuevoUsuario) {
 
-        // --- VALIDACIÓN 1: Datos obligatorios ---
-        // Nos aseguramos de no procesar peticiones vacías o sin nombre de usuario
+        // 1. Validación de Integridad de Datos
+        // Garantiza que la petición contenga un payload válido y con los campos requeridos
         if (nuevoUsuario == null) {
             return Response.status(400).entity("{\"mensaje\": \"No se enviaron datos.\"}").build();
         }
@@ -76,18 +79,18 @@ public class UsuarioController {
             return Response.status(400).entity("{\"mensaje\": \"El nombre de usuario es obligatorio.\"}").build();
         }
 
-        // --- VALIDACIÓN 2: Fortaleza de Contraseña ---
+        // 2. Validación de Políticas de Seguridad
         if (nuevoUsuario.getContrasena() == null || nuevoUsuario.getContrasena().length() < 5) {
             return Response.status(400)
                     .entity("{\"mensaje\": \"La contraseña es muy débil. Debe tener al menos 5 caracteres.\"}").build();
         }
 
-        // --- CAMBIO PARA ARREGLAR EL ERROR ---
-        // Generamos un código temporal aunque sea un registro administrativo,
-        // para cumplir con el requisito del DAO (que exige siempre un código de 6 dígitos).
+        // 3. Generación de Token Temporal
+        // Implementa un código numérico de 6 dígitos para satisfacer las restricciones
+        // de la base de datos al invocar el método de registro estándar.
         String codigoGenerado = String.format("%06d", new Random().nextInt(999999));
 
-        // Ahora pasamos AMBOS parámetros: el usuario Y el código generado
+        // Ejecución de la transacción de guardado
         boolean exito = dao.registrarNuevoUsuario(nuevoUsuario, codigoGenerado);
 
         if (exito) {
@@ -100,15 +103,16 @@ public class UsuarioController {
     }
 
     /**
-     * 4. ACTUALIZAR USUARIO (PUT)
-     * Recibe los datos modificados de un usuario existente y sobrescribe
-     * la información en la base de datos.
-     * @param usuarioEditado Objeto con los nuevos datos (debe incluir el ID original).
+     * ACTUALIZAR USUARIO (PUT)
+     * Procesa la modificación de los datos de un usuario existente, sobrescribiendo
+     * la información en la base de datos según los parámetros enviados.
+     * Parametro usuarioEditado: Objeto con los nuevos datos, que debe incluir el ID original.
+     * Retorna: Estado de la transacción de actualización.
      */
     @PUT
     @Consumes(MediaType.APPLICATION_JSON)
     public Response actualizarUsuario(Usuario usuarioEditado) {
-        // El DAO se encarga de hacer el UPDATE en SQL
+        // Delega la ejecución del bloque UPDATE a la capa de acceso a datos
         boolean exito = dao.actualizar(usuarioEditado);
 
         if (exito) {
@@ -119,14 +123,15 @@ public class UsuarioController {
     }
 
     /**
-     * 5. ELIMINAR USUARIO (DELETE)
-     * Borra permanentemente el registro de un cliente o empleado del sistema.
-     * @param id El identificador único del usuario a eliminar.
+     * ELIMINAR USUARIO (DELETE)
+     * Ejecuta el borrado permanente del registro de un cliente o empleado dentro del sistema.
+     * Parametro id: El identificador único del usuario a eliminar.
+     * Retorna: Confirmación de la operación de eliminación.
      */
     @DELETE
     @Path("/{id}")
     public Response eliminarUsuario(@PathParam("id") int id) {
-        // El DAO ejecuta la sentencia DELETE en SQL
+        // Delega la ejecución del bloque DELETE a la capa de acceso a datos
         boolean exito = dao.eliminar(id);
 
         if (exito) {

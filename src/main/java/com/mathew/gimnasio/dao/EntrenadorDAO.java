@@ -1,3 +1,7 @@
+/**
+ * Autor: Mathew Lara
+ * Fecha: 08/06/2026
+ */
 package com.mathew.gimnasio.dao;
 
 import com.mathew.gimnasio.configuracion.ConexionDB;
@@ -10,11 +14,27 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 
+/**
+ * DAO DE ENTRENADORES
+ * Componente encargado de gestionar toda la persistencia de datos relacionada con el módulo
+ * de entrenadores. Interactúa con las tablas de rutinas, ejercicios, alumnos asignados y
+ * consolida la información para el dashboard del personal técnico.
+ */
 public class EntrenadorDAO {
 
     // ==========================================
     // MÉTODO INTERNO DE APOYO
     // ==========================================
+
+    /**
+     * OBTENER ID DE PLANTILLA
+     * Método interno auxiliar que recupera o genera un cliente "plantilla" a nivel de sistema.
+     * Este registro comodín permite a los entrenadores crear y guardar rutinas en su biblioteca
+     * personal sin necesidad de asignarlas inmediatamente a un cliente real.
+     * Parametro conn: Conexión activa a la base de datos.
+     * Parametro idEmpresa: Identificador de la sucursal.
+     * Retorna: El identificador único del cliente plantilla.
+     */
     private int obtenerIdPlantilla(Connection conn, int idEmpresa) {
         try {
             String queryBusqueda = "SELECT c.id_cliente FROM clientes c JOIN usuarios u ON c.id_usuario = u.id_usuario WHERE u.usuario = ?";
@@ -45,6 +65,17 @@ public class EntrenadorDAO {
     // ==========================================
     // REGLAS DE NEGOCIO Y VALIDACIONES
     // ==========================================
+
+    /**
+     * VALIDAR DUPLICIDAD DE NOMBRE DE RUTINA
+     * Verifica que un entrenador no asigne el mismo nombre a dos rutinas diferentes
+     * dentro de su biblioteca personal para evitar conflictos de identificación.
+     * Parametro nombre: Nombre de la rutina a validar.
+     * Parametro idUsuarioEntrenador: Identificador del entrenador creador.
+     * Parametro idEmpresa: Identificador de la sucursal.
+     * Parametro idRutinaExcluida: Identificador a omitir en la validación (útil durante la edición).
+     * Retorna: Verdadero si el nombre ya está en uso.
+     */
     public boolean existeNombreRutina(String nombre, int idUsuarioEntrenador, int idEmpresa, int idRutinaExcluida) {
         try (Connection conn = ConexionDB.getConnection()) {
             int idPlantilla = obtenerIdPlantilla(conn, idEmpresa);
@@ -67,6 +98,13 @@ public class EntrenadorDAO {
         return false;
     }
 
+    /**
+     * VALIDAR DUPLICIDAD DE NOMBRE DE EJERCICIO
+     * Previene la inserción de ejercicios con nombres idénticos en el catálogo global.
+     * Parametro nombre: Nombre del ejercicio a evaluar.
+     * Parametro idExcluido: ID del ejercicio a ignorar (para procesos de edición).
+     * Retorna: Verdadero si ya existe un ejercicio con ese nombre exacto.
+     */
     public boolean existeNombreEjercicio(String nombre, int idExcluido) {
         String sql = "SELECT COUNT(*) FROM ejercicios WHERE LOWER(nombre_ejercicio) = LOWER(?) AND id_ejercicio != ?";
         try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -82,6 +120,15 @@ public class EntrenadorDAO {
     // ==========================================
     // DASHBOARD ENTRENADOR
     // ==========================================
+
+    /**
+     * OBTENER TELEMETRÍA PARA DASHBOARD DE ENTRENADOR
+     * Ejecuta múltiples consultas para consolidar el perfil del entrenador, su total
+     * de alumnos activos, rutinas creadas y un resumen de las asignaciones vigentes.
+     * Parametro idUsuario: Identificador del entrenador.
+     * Parametro idEmpresa: Identificador de la sucursal.
+     * Retorna: Objeto DTO con las estadísticas estructuradas.
+     */
     public EntrenadorDashboardDTO obtenerDashboard(int idUsuario, int idEmpresa) {
         EntrenadorDashboardDTO dto = new EntrenadorDashboardDTO();
         try (Connection conn = ConexionDB.getConnection()) {
@@ -159,11 +206,22 @@ public class EntrenadorDAO {
     // ==========================================
     // GESTIÓN DE RUTINAS
     // ==========================================
+
+    /**
+     * CREAR RUTINA DE ENTRENAMIENTO
+     * Maneja una transacción en base de datos para insertar la cabecera de una rutina
+     * y, mediante la ejecución por lotes (batch processing), insertar todos los ejercicios
+     * asociados asegurando la integridad referencial.
+     * Parametro idUsuarioEntrenador: Identificador del autor de la rutina.
+     * Parametro idEmpresa: Identificador de la sucursal.
+     * Parametro datos: DTO con la estructura de la nueva rutina.
+     * Retorna: Verdadero si la transacción completa (cabecera + detalle) finaliza con éxito.
+     */
     public boolean crearRutina(int idUsuarioEntrenador, int idEmpresa, NuevaRutinaDTO datos) {
         Connection conn = null;
         try {
             conn = ConexionDB.getConnection();
-            conn.setAutoCommit(false);
+            conn.setAutoCommit(false); // Inicia transacción explícita
 
             int idPlantilla = obtenerIdPlantilla(conn, idEmpresa);
 
@@ -184,6 +242,7 @@ public class EntrenadorDAO {
             int idRutina = 0;
             if (rs.next()) idRutina = rs.getInt(1);
 
+            // Inserción en lote (Batch) de los ejercicios seleccionados
             if (datos.getIdsEjercicios() != null && !datos.getIdsEjercicios().isEmpty()) {
                 String sqlDetalle = "INSERT INTO detalle_rutinas (id_rutina, id_ejercicio, series, repeticiones) VALUES (?, ?, '4 Series', '12 Reps')";
                 ps = conn.prepareStatement(sqlDetalle);
@@ -195,7 +254,7 @@ public class EntrenadorDAO {
                 ps.executeBatch();
             }
 
-            conn.commit();
+            conn.commit(); // Confirma la transacción
             return true;
         } catch (Exception e) {
             try { if (conn != null) conn.rollback(); } catch (Exception ex) {}
@@ -206,6 +265,16 @@ public class EntrenadorDAO {
         }
     }
 
+    /**
+     * MODIFICAR RUTINA EXISTENTE
+     * Actualiza el encabezado de la rutina y regenera el detalle de los ejercicios
+     * mediante la eliminación y posterior inserción en lote (estrategia delete-and-insert)
+     * bajo una transacción controlada.
+     * Parametro idRutina: Identificador de la rutina a modificar.
+     * Parametro idEmpresa: Identificador de la sucursal.
+     * Parametro datos: Nueva estructura y contenido de la rutina.
+     * Retorna: Verdadero si la modificación estructural tiene éxito.
+     */
     public boolean modificarRutina(int idRutina, int idEmpresa, NuevaRutinaDTO datos) {
         Connection conn = null;
         try {
@@ -221,10 +290,12 @@ public class EntrenadorDAO {
             ps.setInt(3, idRutina);
             ps.executeUpdate();
 
+            // Limpieza previa del detalle para asegurar consistencia
             ps = conn.prepareStatement("DELETE FROM detalle_rutinas WHERE id_rutina = ?");
             ps.setInt(1, idRutina);
             ps.executeUpdate();
 
+            // Inserción del nuevo set de ejercicios
             if (datos.getIdsEjercicios() != null && !datos.getIdsEjercicios().isEmpty()) {
                 String sqlDetalle = "INSERT INTO detalle_rutinas (id_rutina, id_ejercicio, series, repeticiones) VALUES (?, ?, '4 Series', '12 Reps')";
                 ps = conn.prepareStatement(sqlDetalle);
@@ -247,6 +318,13 @@ public class EntrenadorDAO {
         }
     }
 
+    /**
+     * DESACTIVAR RUTINA (ELIMINADO LÓGICO)
+     * Deshabilita la rutina en el sistema sin eliminarla físicamente, preservando
+     * la integridad histórica de los registros y entrenamientos pasados.
+     * Parametro idRutina: Identificador de la rutina.
+     * Retorna: Estado de la actualización en base de datos.
+     */
     public boolean desactivarRutina(int idRutina) {
         try (Connection conn = ConexionDB.getConnection()) {
             String sql = "UPDATE rutinas SET activa = FALSE WHERE id_rutina = ?";
@@ -256,6 +334,14 @@ public class EntrenadorDAO {
         } catch (Exception e) { e.printStackTrace(); return false; }
     }
 
+    /**
+     * REACTIVAR RUTINA
+     * Restaura una rutina enviada a la papelera, asignándola de nuevo a la plantilla
+     * predeterminada del sistema.
+     * Parametro idRutina: Identificador de la rutina.
+     * Parametro idEmpresa: Identificador de la sucursal.
+     * Retorna: Verdadero si se logró la reactivación.
+     */
     public boolean reactivarRutina(int idRutina, int idEmpresa) {
         try (Connection conn = ConexionDB.getConnection()) {
             int idPlantilla = obtenerIdPlantilla(conn, idEmpresa);
@@ -270,6 +356,15 @@ public class EntrenadorDAO {
     // ==========================================
     // AGENDA Y ALUMNOS
     // ==========================================
+
+    /**
+     * OBTENER AGENDA DEL DÍA
+     * Recupera el listado de alumnos asignados al entrenador, indicando qué rutina
+     * les corresponde y si ya han culminado su entrenamiento en la fecha actual.
+     * Parametro idUsuarioEntrenador: Identificador del entrenador.
+     * Parametro idEmpresa: Identificador de la sucursal.
+     * Retorna: Colección de resúmenes de alumnos para el panel del día.
+     */
     public java.util.List<EntrenadorDashboardDTO.AlumnoResumen> obtenerAgendaHoy(int idUsuarioEntrenador, int idEmpresa) {
         java.util.List<EntrenadorDashboardDTO.AlumnoResumen> agenda = new ArrayList<>();
         try (Connection conn = ConexionDB.getConnection()) {
@@ -301,6 +396,15 @@ public class EntrenadorDAO {
         return agenda;
     }
 
+    /**
+     * VINCULAR ALUMNO A RUTINA
+     * Ejecuta una transacción compleja que valida límites máximos de rutinas activas,
+     * asegura que el cliente exista en la base operativa y procede a clonar
+     * la estructura de entrenamiento de la biblioteca hacia el perfil del alumno.
+     * Parametro idUsuarioEntrenador: Identificador del entrenador a cargo.
+     * Parametro datos: Información de asignación enviada desde el controlador.
+     * Retorna: Verdadero si se establece el vínculo sin exceder límites ni causar colisiones.
+     */
     public boolean vincularAlumno(int idUsuarioEntrenador, AsignarAlumnoDTO datos) {
         Connection conn = null;
         try {
@@ -322,6 +426,7 @@ public class EntrenadorDAO {
             if (rs.next()) {
                 realIdCliente = rs.getInt(1);
             } else {
+                // Procedimiento de contingencia: Inserción del perfil cliente si solo existe como usuario
                 ps = conn.prepareStatement("SELECT nombre, apellido FROM usuarios WHERE id_usuario = ?");
                 ps.setInt(1, datos.getIdCliente());
                 ResultSet rsUsr = ps.executeQuery();
@@ -345,6 +450,7 @@ public class EntrenadorDAO {
                 }
             }
 
+            // Control de límite de asignaciones por seguridad operativa
             ps = conn.prepareStatement("SELECT COUNT(*) FROM rutinas WHERE id_cliente = ? AND id_entrenador = ? AND activa = TRUE");
             ps.setInt(1, realIdCliente);
             ps.setInt(2, idEntrenador);
@@ -353,6 +459,7 @@ public class EntrenadorDAO {
                 return false;
             }
 
+            // Lógica de clonado de la rutina seleccionada al perfil del cliente
             if (datos.getIdRutinaAsignada() > 0) {
                 String nombreOriginal = "Rutina Personalizada";
                 ps = conn.prepareStatement("SELECT nombre_rutina FROM rutinas WHERE id_rutina = ?");
@@ -380,6 +487,7 @@ public class EntrenadorDAO {
                 ps.executeUpdate();
             }
 
+            // Reseteo de historial diario para forzar nueva ejecución por el alumno
             ps = conn.prepareStatement("DELETE FROM historial_entrenamientos WHERE id_cliente = ? AND fecha = CURRENT_DATE");
             ps.setInt(1, realIdCliente);
             ps.executeUpdate();
@@ -395,6 +503,14 @@ public class EntrenadorDAO {
         }
     }
 
+    /**
+     * DESVINCULAR ALUMNO
+     * Retira la tutoría de un entrenador sobre un alumno, desactivando las rutinas
+     * asignadas en lugar de borrarlas, protegiendo así el historial del cliente.
+     * Parametro idUsuarioEntrenador: Identificador del entrenador actual.
+     * Parametro idUsuarioCliente: Identificador del cliente.
+     * Retorna: Confirmación de desvinculación operativa.
+     */
     public boolean desvincularAlumno(int idUsuarioEntrenador, int idUsuarioCliente) {
         try (Connection conn = ConexionDB.getConnection()) {
             int idEntrenador = 0;
@@ -425,6 +541,13 @@ public class EntrenadorDAO {
     // ==========================================
     // MÓDULO DE EJERCICIOS
     // ==========================================
+
+    /**
+     * OBTENER CATÁLOGO DE EJERCICIOS (JSON)
+     * Realiza una extracción total de la base de ejercicios disponibles,
+     * construyendo la respuesta JSON desde la misma capa DAO.
+     * Retorna: Cadena String que representa el JSON Array con el catálogo de ejercicios.
+     */
     public String obtenerEjerciciosJSON() {
         StringBuilder json = new StringBuilder("[");
         String sql = "SELECT id_ejercicio, nombre_ejercicio, grupo_muscular, activo FROM ejercicios ORDER BY id_ejercicio ASC";
@@ -449,6 +572,13 @@ public class EntrenadorDAO {
         return json.toString();
     }
 
+    /**
+     * GUARDAR NUEVO EJERCICIO
+     * Inserta un nuevo elemento en la tabla maestra de ejercicios.
+     * Parametro nombre: Denominación del ejercicio (ej. Press de Banca).
+     * Parametro grupo: Grupo muscular principal implicado.
+     * Retorna: Verdadero en caso de inserción exitosa en base de datos.
+     */
     public boolean guardarEjercicio(String nombre, String grupo) {
         String sql = "INSERT INTO ejercicios (nombre_ejercicio, grupo_muscular, activo) VALUES (?, ?, TRUE)";
         try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -458,6 +588,14 @@ public class EntrenadorDAO {
         } catch (Exception e) { e.printStackTrace(); return false; }
     }
 
+    /**
+     * EDITAR EJERCICIO EXISTENTE
+     * Actualiza la información técnica de un ejercicio ya registrado.
+     * Parametro id: Identificador único del ejercicio.
+     * Parametro nombre: Nueva denominación técnica a aplicar.
+     * Parametro grupo: Nueva clasificación muscular.
+     * Retorna: Estado de la actualización.
+     */
     public boolean editarEjercicio(int id, String nombre, String grupo) {
         String sql = "UPDATE ejercicios SET nombre_ejercicio=?, grupo_muscular=? WHERE id_ejercicio=?";
         try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -468,6 +606,14 @@ public class EntrenadorDAO {
         } catch (Exception e) { e.printStackTrace(); return false; }
     }
 
+    /**
+     * CAMBIAR ESTADO DE EJERCICIO
+     * Ejecuta una desactivación lógica (soft-delete) o rehabilitación
+     * sobre un ejercicio específico para controlar su visibilidad en el sistema.
+     * Parametro id: Identificador del ejercicio a afectar.
+     * Parametro estado: Valor booleano que definirá el nuevo estado.
+     * Retorna: Confirmación del cambio a nivel de persistencia.
+     */
     public boolean cambiarEstadoEjercicio(int id, boolean estado) {
         String sql = "UPDATE ejercicios SET activo=? WHERE id_ejercicio=?";
         try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {

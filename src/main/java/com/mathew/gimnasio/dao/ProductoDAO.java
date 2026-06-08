@@ -1,3 +1,7 @@
+/**
+ * Autor: Mathew Lara
+ * Fecha: 08/06/2026
+ */
 package com.mathew.gimnasio.dao;
 
 import com.mathew.gimnasio.configuracion.ConexionDB;
@@ -7,30 +11,30 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * DAO DEL PRODUCTO
- * Esta clase es la encargada de gestionar los productos de la tienda (suplementos, ropa, etc.).
- * Su diseño es especial porque separa la información básica de las imágenes pesadas
- * para que la tienda cargue de forma instantánea.
+ * DAO DE PRODUCTOS
+ * Componente de acceso a datos encargado de gestionar el catálogo de productos de la tienda física y virtual.
+ * Implementa un diseño de consulta optimizado que separa la recuperación de la información básica
+ * (metadatos) de la extracción de recursos binarios pesados (imágenes) para garantizar un rendimiento eficiente.
  */
 public class ProductoDAO {
 
     /**
-     * LISTAR PRODUCTOS (VERSION LIGERA)
-     * Trae todos los detalles de los productos (nombre, precio, descripción) pero NO la foto.
-     * Esto se hace así para que la base de datos responda rápido y no sature la memoria.
-     * @return Una lista de objetos Producto con su información básica.
+     * LISTAR PRODUCTOS (VERSIÓN LIGERA)
+     * Recupera el listado completo de productos disponibles para una sucursal específica, excluyendo
+     * deliberadamente los datos binarios (imágenes) para prevenir la saturación de memoria y optimizar el tiempo de respuesta.
+     * Parametro idEmpresa: Identificador de la sucursal o franquicia actual.
+     * Retorna: Una lista de objetos Producto poblados con su información descriptiva y de costos.
      */
-    public List<Producto> listarProductos(int idEmpresa) { // <-- 1. Recibe el idEmpresa
+    public List<Producto> listarProductos(int idEmpresa) {
         List<Producto> lista = new ArrayList<>();
 
-        // <-- 2.WHERE id_empresa = ?
+        // Consulta optimizada para la recuperación exclusiva de metadatos
         String sql = "SELECT id_producto, nombre, descripcion, precio, tipo FROM productos WHERE id_empresa = ? ORDER BY id_producto ASC";
 
-        // <-- 3. Cambiamos la estructura del try-with-resources para poder inyectar el parámetro
         try (Connection conn = ConexionDB.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
-            ps.setInt(1, idEmpresa); // Inyectamos la empresa
+            ps.setInt(1, idEmpresa); // Inyección segura del identificador de la empresa
 
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
@@ -51,14 +55,14 @@ public class ProductoDAO {
     }
 
     /**
-     * OBTENER IMAGEN (BYTES)
-     * Este metodo se llama solo cuando la página web necesita mostrar la foto de un producto.
-     * Va a la base de datos y extrae los datos binarios (la foto) del producto solicitado.
-     * @param id El número de identificación del producto.
-     * @return Un arreglo de bytes (la imagen) o null si no tiene foto.
+     * OBTENER IMAGEN DEL PRODUCTO (BINARIO)
+     * Ejecuta una consulta directa a la columna de tipo BYTEA en la base de datos para extraer
+     * el flujo binario correspondiente a la fotografía de un producto específico.
+     * Parametro id: Identificador único del producto en el catálogo.
+     * Retorna: Un arreglo de bytes que representa la imagen, o nulo si el recurso no existe o falla la extracción.
      */
     public byte[] obtenerImagen(int id) {
-        // Buscamos específicamente la columna 'imagen' que es de tipo BYTEA en PostgreSQL
+        // Extracción aislada del recurso binario para renderizado bajo demanda
         String sql = "SELECT imagen FROM productos WHERE id_producto = ?";
         try (Connection conn = ConexionDB.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -66,10 +70,10 @@ public class ProductoDAO {
             ps.setInt(1, id);
             ResultSet rs = ps.executeQuery();
             if (rs.next()) {
-                // Retornamos los bytes de la imagen para que el controlador los convierta en foto
+                // Transforma el flujo de datos SQL a un arreglo de bytes estándar
                 return rs.getBytes("imagen");
             }
         } catch (Exception e) { e.printStackTrace(); }
-        return null; // Si algo falla o no hay imagen, devolvemos vacío
+        return null;
     }
 }

@@ -1,14 +1,25 @@
+/**
+ * Autor: Mathew Lara
+ * Fecha: 08/06/2026
+ */
 package com.mathew.gimnasio.modelos;
 
+/**
+ * MODELO DE EMPRESA
+ * Representa la entidad de negocio principal en el modelo Multi-Tenant del sistema.
+ * Almacena los datos institucionales y de contacto necesarios para identificar
+ * y gestionar de forma aislada a cada franquicia o gimnasio independiente.
+ */
 public class Empresa {
     private int id;
     private String nombre;
     private String ruc;
     private String telefono;
     private String correo;
-    private String direccion; // Agregado por si también lo necesitas guardar
+    private String direccion;
 
-    // Getters y Setters
+    // --- Getters y Setters ---
+
     public int getId() { return id; }
     public void setId(int id) { this.id = id; }
 

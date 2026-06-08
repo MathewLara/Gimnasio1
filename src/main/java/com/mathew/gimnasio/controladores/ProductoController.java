@@ -1,3 +1,7 @@
+/**
+ * Autor: Mathew Lara
+ * Fecha: 08/06/2026
+ */
 package com.mathew.gimnasio.controladores;
 
 import com.mathew.gimnasio.dao.ProductoDAO;
@@ -9,57 +13,57 @@ import java.util.List;
 
 /**
  * CONTROLADOR DE PRODUCTOS
- * * Este componente es el encargado de gestionar el catálogo de la tienda del gimnasio.
- * Permite que la página web obtenga la lista de suplementos, accesorios y, lo más importante,
- * las fotografías de los productos que están guardadas en la base de datos.
+ * Gestiona el catálogo de la tienda del gimnasio.
+ * Permite la obtención de la lista de suplementos, accesorios y
+ * la recuperación de las fotografías de los productos almacenadas en la base de datos.
  */
 @Path("/productos")
 public class ProductoController {
 
-    // El DAO es nuestro "almacenero", es quien sabe ir a las tablas de SQL a buscar los productos
+    // Instancia de ProductoDAO encargada del acceso a datos para la entidad Producto.
     private ProductoDAO dao = new ProductoDAO();
 
     /**
-     * LISTAR PRODUCTOS
-     * * Se usa para cargar toda la vitrina de la tienda. Devuelve nombres, descripciones y precios.
-     * URL: GET /api/productos
-     * * @return Una lista completa de productos en formato JSON para que la web los muestre.
+     * LISTAR PRODUCTOS (GET)
+     * Recupera el listado completo de productos disponibles para la vitrina de la tienda,
+     * incluyendo nombres, descripciones y precios, filtrados por la empresa correspondiente.
+     * Parametro idEmpresa: Identificador numérico de la empresa a consultar.
+     * Retorna: Una lista de productos en formato JSON, o un error 400 si el identificador es nulo o inválido.
      */
     @GET
     @Produces(MediaType.APPLICATION_JSON)
-    // <-- 1. Agregamos @QueryParam para atrapar el ID que viene en la URL
     public Response listar(@QueryParam("idEmpresa") int idEmpresa) {
 
-        // Seguridad: Si alguien intenta entrar sin decir de qué empresa es, se bloquea
+        // Validación de seguridad para asegurar que la petición incluya la empresa correspondiente.
         if (idEmpresa == 0) {
             return Response.status(400).entity("{\"mensaje\": \"Falta el ID de la empresa.\"}").build();
         }
 
-        // <-- 2. Le pasamos el ID al DAO
+        // Consulta a la capa de datos para obtener los productos de la empresa.
         List<Producto> productos = dao.listarProductos(idEmpresa);
         return Response.ok(productos).build();
     }
 
     /**
-     * OBTENER IMAGEN DEL PRODUCTO
-     * * Este metodo es especial: no devuelve texto, devuelve los "bytes" de la imagen.
-     * Gracias a esto, las etiquetas <img> de HTML pueden mostrar las fotos guardadas en SQL.
-     * URL: GET /api/productos/{id}/imagen
-     * * @param id El número identificador del producto cuya foto queremos ver.
+     * OBTENER IMAGEN DEL PRODUCTO (GET)
+     * Extrae y devuelve los bytes de la imagen asociada a un producto específico
+     * para permitir su renderizado directo en elementos visuales del cliente.
+     * Parametro id: El identificador único del producto a consultar.
+     * Retorna: Los datos binarios de la imagen con estado 200, o un estado HTTP 404 si no se encuentra.
      */
     @GET
     @Path("/{id}/imagen")
-    @Produces("image/jpeg") // Engañamos al navegador diciendo que es JPG (funciona con avif/png también)
+    @Produces("image/jpeg")
     public Response obtenerImagen(@PathParam("id") int id) {
-        // El DAO busca en la columna de tipo 'bytea' (binario) de la base de datos
+        // Recupera la información binaria de la imagen desde la base de datos.
         byte[] imagenBytes = dao.obtenerImagen(id);
 
-        // Si el producto tiene una foto cargada...
+        // Verifica si el producto contiene información gráfica válida.
         if (imagenBytes != null && imagenBytes.length > 0) {
-            // Enviamos los datos de la imagen directamente para que se renderice en pantalla
+            // Envía los datos binarios para su visualización.
             return Response.ok(imagenBytes).build();
         } else {
-            // Si no hay foto, respondemos que no se encontró nada (404)
+            // Notifica la ausencia de recursos gráficos para el producto solicitado.
             return Response.status(Response.Status.NOT_FOUND).build();
         }
     }

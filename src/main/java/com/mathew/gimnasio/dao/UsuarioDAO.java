@@ -1,3 +1,7 @@
+/**
+ * Autor: Mathew Lara
+ * Fecha: 08/06/2026
+ */
 package com.mathew.gimnasio.dao;
 
 import com.mathew.gimnasio.configuracion.ConexionDB;
@@ -10,16 +14,24 @@ import java.util.List;
 
 /**
  * DAO DE USUARIOS
- * Es el motor principal de la base de datos para la gestión de cuentas.
- * Maneja transacciones complejas, validación de códigos de correo,
- * activación de cuentas y el inicio de sesión seguro (login).
+ * Componente de acceso a datos principal para la gestión de cuentas e identidades.
+ * Administra transacciones relacionales complejas, validación de factores de autenticación,
+ * activación de perfiles y el control de sesiones seguras.
  */
 public class UsuarioDAO {
 
     // ================================================================
-    // 1. REGISTRO ATÓMICO (Usuario + Cliente + Código en UNA SOLA VEZ)
+    // 1. REGISTRO ATÓMICO (TRANSACCIÓN RELACIONAL COMPLETA)
     // ================================================================
 
+    /**
+     * REGISTRAR NUEVO USUARIO
+     * Procesa la creación de una nueva identidad de usuario ejecutando una transacción atómica
+     * que abarca el registro de credenciales, el perfil de cliente y la generación del token de verificación.
+     * Parametro u: Objeto Usuario con la información base proporcionada.
+     * Parametro codigoGenerado: Token de seguridad pre-calculado para validación.
+     * Retorna: Verdadero si la transacción completa finaliza exitosamente; falso en caso de rollback.
+     */
     public boolean registrarNuevoUsuario(Usuario u, String codigoGenerado) {
         Connection conn = null;
         PreparedStatement psUsuario = null;
@@ -29,9 +41,9 @@ public class UsuarioDAO {
 
         try {
             conn = ConexionDB.getConnection();
-            conn.setAutoCommit(false);
+            conn.setAutoCommit(false); // Inicia transacción atómica
 
-            // --- A. INSERTAR USUARIO ---
+            // --- A. Inserción de credenciales base ---
             String sqlUsuario = "INSERT INTO usuarios (id_rol, usuario, contrasena, activo) VALUES (?, ?, ?, ?)";
             psUsuario = conn.prepareStatement(sqlUsuario, Statement.RETURN_GENERATED_KEYS);
 
@@ -49,7 +61,7 @@ public class UsuarioDAO {
                 u.setIdUsuario(idGenerado);
             }
 
-            // --- B. INSERTAR CLIENTE ---
+            // --- B. Inserción de perfil de cliente ---
             String nombre = (u.getNombre() != null) ? u.getNombre() : "N/A";
             String apellido = (u.getApellido() != null) ? u.getApellido() : "N/A";
             String emailLimpio = u.getEmail().trim().toLowerCase();
@@ -70,14 +82,14 @@ public class UsuarioDAO {
 
             psCliente.executeUpdate();
 
-            // --- C. INSERTAR CÓDIGO ---
+            // --- C. Inserción de token de verificación ---
             String sqlCodigo = "INSERT INTO codigos_verificacion (id_usuario, codigo, fecha_expiracion) VALUES (?, ?, CURRENT_TIMESTAMP + INTERVAL '15 minutes')";
             psCodigo = conn.prepareStatement(sqlCodigo);
             psCodigo.setInt(1, idGenerado);
             psCodigo.setString(2, codigoGenerado);
             psCodigo.executeUpdate();
 
-            // --- CONFIRMAR TODO ---
+            // --- Confirmación de transacción ---
             conn.commit();
             return true;
 
@@ -98,6 +110,14 @@ public class UsuarioDAO {
     // 2. VALIDAR CÓDIGO POR EMAIL
     // ==========================================
 
+    /**
+     * VALIDAR TOKEN POR CORREO
+     * Verifica la validez y vigencia del token de seguridad asociado a un correo electrónico
+     * específico para completar el proceso de activación de la cuenta.
+     * Parametro email: Dirección de correo electrónico del usuario.
+     * Parametro codigoIngresado: Token de seguridad proveído por el usuario.
+     * Retorna: Verdadero si la validación es correcta y la cuenta se activa.
+     */
     public boolean validarCodigoPorEmail(String email, String codigoIngresado) {
         Connection conn = null;
         PreparedStatement ps = null;
@@ -145,6 +165,12 @@ public class UsuarioDAO {
     // 3. ACTIVAR USUARIO
     // ==========================================
 
+    /**
+     * ACTIVAR CUENTA DE USUARIO
+     * Actualiza el estado lógico de la cuenta a activo tras superar un proceso de validación.
+     * Parametro idUsuario: Identificador de la cuenta.
+     * Retorna: Verdadero si la actualización en base de datos es exitosa.
+     */
     public boolean activarUsuario(int idUsuario) {
         String sql = "UPDATE usuarios SET activo = TRUE WHERE id_usuario = ?";
         try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -156,6 +182,15 @@ public class UsuarioDAO {
     // ==========================================
     // 4. LOGIN
     // ==========================================
+
+    /**
+     * AUTENTICAR USUARIO (LOGIN)
+     * Procesa las credenciales de ingreso evaluando el identificador (usuario o email) y
+     * validando criptográficamente la contraseña almacenada. Determina el perfil y sucursal correspondientes.
+     * Parametro userOrEmail: Cadena con el nombre de usuario o correo.
+     * Parametro pass: Contraseña ingresada en texto plano.
+     * Retorna: Objeto Usuario poblado con la sesión autorizada, o nulo si las credenciales son inválidas.
+     */
     public Usuario login(String userOrEmail, String pass) {
         String sql = "SELECT u.*, c.email as email_cliente, e.email as email_entrenador " +
                 "FROM usuarios u " +
@@ -181,7 +216,7 @@ public class UsuarioDAO {
                     u.setUsuario(rs.getString("usuario"));
                     u.setActivo(rs.getBoolean("activo"));
 
-                    // CAPTURAMOS LA EMPRESA DEL USUARIO
+                    // Aislamiento de acceso por sucursal (Multi-Tenant)
                     u.setIdEmpresa(rs.getInt("id_empresa"));
 
                     String email = rs.getString("email_cliente");
@@ -196,8 +231,16 @@ public class UsuarioDAO {
     }
 
     // ==========================================
-    // MÉTODO REAL PARA EL DASHBOARD DE ADMIN (CON MULTIEMPRESA)
+    // MÉTODO ESTADÍSTICO (DASHBOARD ADMIN)
     // ==========================================
+
+    /**
+     * OBTENER MÉTRICAS BÁSICAS DEL ADMINISTRADOR
+     * Consolida los volúmenes de clientes, entrenadores e ingresos generados
+     * aislando la información por empresa.
+     * Parametro idEmpresa: Identificador de la sucursal.
+     * Retorna: JSON estructurado con las métricas requeridas.
+     */
     public String getAdminStatsJSON(int idEmpresa) {
         int totalClientes = 0;
         int totalEntrenadores = 0;
@@ -230,6 +273,13 @@ public class UsuarioDAO {
     // GESTIÓN DE USUARIOS (PANEL ADMIN)
     // ==========================================
 
+    /**
+     * OBTENER USUARIOS PARA ADMINISTRACIÓN
+     * Recupera el catálogo completo de cuentas activas e inactivas pertenecientes
+     * a una empresa en particular, unificando perfiles técnicos y de clientes.
+     * Parametro idEmpresa: Identificador de la sucursal a consultar.
+     * Retorna: JSON Array serializado con los datos de las cuentas.
+     */
     public String obtenerUsuariosParaAdminJSON(int idEmpresa) {
         StringBuilder json = new StringBuilder("[");
 
@@ -272,6 +322,13 @@ public class UsuarioDAO {
         return json.toString();
     }
 
+    /**
+     * CAMBIAR ESTADO LOGICO DE USUARIO
+     * Modifica los permisos de acceso al sistema bloqueando o habilitando perfiles de usuario.
+     * Parametro idUsuario: Identificador de la cuenta.
+     * Parametro nuevoEstado: Valor booleano del estado deseado.
+     * Retorna: Estado de la actualización en el registro.
+     */
     public boolean cambiarEstadoUsuario(int idUsuario, boolean nuevoEstado) {
         String sql = "UPDATE usuarios SET activo = ? WHERE id_usuario = ?";
         try (Connection conn = ConexionDB.getConnection();
@@ -282,6 +339,13 @@ public class UsuarioDAO {
         } catch (Exception e) { return false; }
     }
 
+    /**
+     * AGREGAR PERSONAL ADMINISTRATIVO (CREACIÓN MANUAL)
+     * Ejecuta una transacción orientada a crear cuentas corporativas de forma directa,
+     * validando el rol de destino y generando el perfil asociado (entrenador o cliente).
+     * Parametro u: Estructura del nuevo perfil corporativo.
+     * Retorna: Confirmación del bloque transaccional.
+     */
     public boolean agregarPersonalAdmin(Usuario u) {
         Connection conn = null;
         try {
@@ -311,7 +375,7 @@ public class UsuarioDAO {
                 return false;
             }
 
-            if (u.getIdRol() == 4) { // Cliente
+            if (u.getIdRol() == 4) { // Entidad Cliente
                 String sqlCli = "INSERT INTO clientes (id_usuario, nombre, apellido, email, telefono, id_empresa) VALUES (?, ?, ?, ?, ?, ?)";
                 try (PreparedStatement psCli = conn.prepareStatement(sqlCli)) {
                     psCli.setInt(1, nuevoIdUsuario);
@@ -322,7 +386,7 @@ public class UsuarioDAO {
                     psCli.setInt(6, u.getIdEmpresa());
                     psCli.executeUpdate();
                 }
-            } else if (u.getIdRol() == 3) { // Entrenador
+            } else if (u.getIdRol() == 3) { // Entidad Entrenador
                 String sqlEnt = "INSERT INTO entrenadores (id_usuario, nombre, apellido, email, id_empresa) VALUES (?, ?, ?, ?, ?)";
                 try (PreparedStatement psEnt = conn.prepareStatement(sqlEnt)) {
                     psEnt.setInt(1, nuevoIdUsuario);
@@ -346,6 +410,13 @@ public class UsuarioDAO {
         }
     }
 
+    /**
+     * EDITAR PERSONAL ADMINISTRATIVO
+     * Procesa la modificación de datos y credenciales asociadas a un perfil corporativo
+     * ya existente en el sistema, asegurando la consistencia cruzada en las entidades.
+     * Parametro u: Estructura del perfil con los datos a persistir.
+     * Retorna: Estado de la actualización en base de datos.
+     */
     public boolean editarPersonalAdmin(Usuario u) {
         Connection conn = null;
         try {
@@ -406,6 +477,13 @@ public class UsuarioDAO {
         }
     }
 
+    /**
+     * REGISTRAR TRAZA DE AUDITORÍA (ACCESO)
+     * Inserta un evento de telemetría de seguridad documentando un intento de acceso a la plataforma.
+     * Parametro idUsuario: Identificador de la cuenta operada.
+     * Parametro ip: Dirección IPv4 / IPv6 de procedencia.
+     * Parametro estado: Diagnóstico del intento de inicio de sesión ("Exitoso" o "Fallido").
+     */
     public void registrarLogAcceso(int idUsuario, String ip, String estado) {
         if (ip != null && ip.length() > 45) {
             ip = ip.substring(0, 45);
@@ -432,8 +510,17 @@ public class UsuarioDAO {
     }
 
     // ==========================================
-    // NUEVO MÓDULO: REPORTES GERENCIALES (CON MULTIEMPRESA)
+    // MÓDULO: REPORTES GERENCIALES
     // ==========================================
+
+    /**
+     * GENERAR REPORTES ESTADÍSTICOS
+     * Consolida diversas extracciones de la base de datos (rendimiento financiero mensual,
+     * distribución de pagos y popularidad de membresías) en un objeto JSON unificado
+     * para la capa de visualización.
+     * Parametro idEmpresa: Identificador de la sucursal de origen.
+     * Retorna: JSON estructurado con arreglos y métricas de analítica de datos.
+     */
     public String getReportesJSON(int idEmpresa) {
         StringBuilder json = new StringBuilder("{");
 
@@ -502,7 +589,6 @@ public class UsuarioDAO {
 
         } catch (Exception e) {
             System.out.println("Error en reportes: " + e.getMessage());
-            // Si hay error (ej. tabla no existe), enviamos vacío para que no colapse el JS
             return "{\"ingresosPorMetodo\": [], \"membresiasPopulares\": [], \"kpis\": {}}";
         }
         json.append("}");
@@ -510,9 +596,16 @@ public class UsuarioDAO {
     }
 
     // ==========================================
-    // REQUERIMIENTOS RF08 Y RF09: GENERAR CSV DESDE EL BACKEND (CON MULTIEMPRESA)
+    // EXPORTACIÓN DE DATOS (CSV)
     // ==========================================
 
+    /**
+     * GENERAR REPORTE DE ACCESOS EN CSV
+     * Construye un archivo de texto plano delimitado por comas con la bitácora
+     * completa de auditoría de sesiones para cumplimiento de normativas de seguridad.
+     * Parametro idEmpresa: Identificador de la sucursal de origen.
+     * Retorna: Cadena String formateada según los estándares CSV.
+     */
     public String getLogsAccesoCSV(int idEmpresa) {
         StringBuilder csv = new StringBuilder();
         csv.append("ID Registro,Usuario,Rol,Fecha y Hora,Direccion IP,Dispositivo,Estado de Ingreso\n");
@@ -535,6 +628,13 @@ public class UsuarioDAO {
         return csv.toString();
     }
 
+    /**
+     * GENERAR REPORTE FINANCIERO EN CSV
+     * Agrupa y totaliza los ingresos económicos procesados por la sucursal segmentados por
+     * el método de recaudación, devolviendo la matriz de datos lista para exportación.
+     * Parametro idEmpresa: Identificador de la sucursal de origen.
+     * Retorna: Cadena String representativa de un archivo CSV.
+     */
     public String getReporteIngresosCSV(int idEmpresa) {
         StringBuilder csv = new StringBuilder();
         csv.append("Metodo de Pago,Total Recaudado (USD)\n");
@@ -551,7 +651,7 @@ public class UsuarioDAO {
     }
 
     // -------------------------------------------------------------------------
-    // STUBS
+    // STUBS COMPLEMENTARIOS
     // -------------------------------------------------------------------------
     public boolean validarCodigo2FA(int id, String c) { return false; }
     public List<Usuario> listar() { return new ArrayList<>(); }

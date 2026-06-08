@@ -1,3 +1,7 @@
+/**
+ * Author: Mathew Lara
+ * Fecha: 07/06/2026
+ */
 package com.mathew.gimnasio.controladores;
 
 import com.mathew.gimnasio.configuracion.ConexionDB;
@@ -19,11 +23,11 @@ public class AsistenciaController {
 
     /**
      * PROCESAR ACCESO INTELIGENTE (TOGGLE ENTRADA/SALIDA)
-     * Este método contiene lógica de negocio transaccional: detecta automáticamente
+     * Este metodo contiene lógica de negocio transaccional: detecta automáticamente
      * si el usuario está ingresando o abandonando las instalaciones.
      * URL: POST /api/accesos/escanear/{idUsuario}
-     * * @param idUsuario El ID decodificado del código QR.
-     * @return Respuesta JSON con un mensaje dinámico renderizable en la UI.
+     * Parámetro idUsuario: El ID decodificado del código QR.
+     * Retorna: Respuesta JSON con un mensaje dinámico renderizable en la UI.
      */
     @POST
     @Path("/escanear/{idUsuario}")
@@ -73,7 +77,7 @@ public class AsistenciaController {
                 psUpd.setInt(1, idAsistencia);
                 psUpd.executeUpdate();
 
-                mensaje = "👋 ¡Hasta luego, " + nombre + "!";
+                mensaje = " ¡Hasta luego, " + nombre + "!";
                 tipo = "SALIDA";
             } else {
                 /* * CASO B: MARCAR ENTRADA (CHECK-IN)
@@ -84,7 +88,7 @@ public class AsistenciaController {
                 psIns.setInt(1, idCliente);
                 psIns.executeUpdate();
 
-                mensaje = "🚀 ¡Bienvenido, " + nombre + "!";
+                mensaje = " ¡Bienvenido, " + nombre + "!";
                 tipo = "ENTRADA";
             }
 

@@ -1,13 +1,32 @@
+/**
+ * Autor: Mathew Lara
+ * Fecha: 08/06/2026
+ */
 package com.mathew.gimnasio.dao;
 
 import com.mathew.gimnasio.configuracion.ConexionDB;
 import java.sql.*;
 
+/**
+ * DAO DE RECEPCIÓN
+ * Objeto de acceso a datos responsable de operar el flujo continuo del mostrador de atención.
+ * Procesa en tiempo real el escáner de códigos QR para el control de accesos físicos,
+ * monitorea la capacidad (aforo), y gestiona el flujo de caja e ingresos del día.
+ */
 public class RecepcionDAO {
 
     // ==========================================
     // 1. CARGAR DASHBOARD (AFORO Y CAJA) AISLADO POR EMPRESA
     // ==========================================
+
+    /**
+     * OBTENER DASHBOARD DE RECEPCIÓN (JSON)
+     * Consolida las métricas clave del día actual en tiempo real, incluyendo la recaudación
+     * en caja de membresías aprobadas, el aforo físico activo en las instalaciones, y el log
+     * de las últimas entradas o salidas registradas.
+     * Parametro idEmpresa: Identificador de la sucursal de operación.
+     * Retorna: Una estructura JSON formateada con los KPIs diarios y la actividad reciente.
+     */
     public String getDashboardRecepJSON(int idEmpresa) {
         StringBuilder json = new StringBuilder("{");
 
@@ -23,7 +42,7 @@ public class RecepcionDAO {
                 }
             }
 
-            // 2. Personas Entrenando
+            // 2. Personas Entrenando (Aforo)
             int aforoHoy = 0;
             String sqlAforo = "SELECT COUNT(*) FROM asistencias a INNER JOIN clientes c ON a.id_cliente = c.id_cliente WHERE DATE(a.fecha_hora_ingreso) = CURRENT_DATE AND a.fecha_hora_salida IS NULL AND c.id_empresa = ?";
             try(PreparedStatement ps = conn.prepareStatement(sqlAforo)) {
@@ -92,6 +111,16 @@ public class RecepcionDAO {
     // ==========================================
     // 2. PROCESAR EL ESCÁNER QR (ENTRADA / SALIDA)
     // ==========================================
+
+    /**
+     * PROCESAR LECTURA DE ACCESO QR
+     * Gestiona la lógica de control de acceso físico a las instalaciones. Valida el estado activo
+     * de la membresía, detecta si el evento corresponde a una entrada o una salida, y aplica la
+     * restricción de negocio de un acceso único por día natural.
+     * Parametro identificador: El código emitido por el escáner (puede contener prefijos del sistema).
+     * Parametro idEmpresa: Identificador de la sucursal de acceso.
+     * Retorna: JSON estructurado indicando el éxito (con mensaje de saludo/despedida) o un error detallado.
+     */
     public String procesarAccesoQr(String identificador, int idEmpresa) {
         try (Connection conn = ConexionDB.getConnection()) {
 
@@ -193,6 +222,15 @@ public class RecepcionDAO {
     // ==========================================
     // 3. OBTENER DIRECTORIO DE SOCIOS (CON ESTADO EN VIVO)
     // ==========================================
+
+    /**
+     * OBTENER DIRECTORIO DE SOCIOS
+     * Extrae el catálogo completo de usuarios con rol de cliente inscritos en la sucursal actual.
+     * Incorpora una subconsulta anidada para determinar en tiempo real si el socio se encuentra
+     * entrenando físicamente en las instalaciones.
+     * Parametro idEmpresa: Identificador de la sucursal a la que pertenecen los socios.
+     * Retorna: Una cadena JSON que representa el listado de clientes y su estado actual de aforo.
+     */
     public String obtenerSociosRecepcionJSON(int idEmpresa) {
         StringBuilder json = new StringBuilder("[");
         String sql = "SELECT u.id_usuario, u.usuario, u.nombre, u.apellido, u.activo, " +
@@ -233,6 +271,14 @@ public class RecepcionDAO {
     // ==========================================
     // 4. OBTENER HISTORIAL DE CAJA (PAGOS)
     // ==========================================
+
+    /**
+     * OBTENER HISTORIAL DE PAGOS APROBADOS
+     * Consulta y formatea un registro de las últimas 50 transacciones económicas exitosas (aprobadas)
+     * procesadas por la sucursal para la auditoría y control de caja por parte de recepción.
+     * Parametro idEmpresa: Identificador de la sucursal recaudadora.
+     * Retorna: JSON Array con el historial de pagos.
+     */
     public String obtenerHistorialPagosJSON(int idEmpresa) {
         StringBuilder json = new StringBuilder("[");
         String sql = "SELECT p.id_pago, u.usuario, p.monto_pagado, p.fecha_pago, p.metodo_pago, p.id_membresia " +
@@ -273,6 +319,19 @@ public class RecepcionDAO {
     // ==========================================
     // 5. REGISTRAR UN NUEVO PAGO (CON ESTADO APROBADO AUTOMÁTICO EN CAJA)
     // ==========================================
+
+    /**
+     * REGISTRAR PAGO PRESENCIAL (MOSTRADOR)
+     * Ejecuta una transacción de base de datos para ingresar un pago recibido de forma directa
+     * en las instalaciones. Al ser verificado físicamente por el personal, el estado del pago
+     * se establece automáticamente en 'APROBADO' y se actualiza la vigencia de la membresía del cliente.
+     * Parametro idUsuarioEnviado: Identificador del cliente.
+     * Parametro idPlan: Identificador de la membresía contratada.
+     * Parametro monto: Valor económico recibido.
+     * Parametro metodo: Modalidad de transacción (Efectivo, Tarjeta, etc.).
+     * Parametro idEmpresa: Identificador de la sucursal de cobro.
+     * Retorna: Verdadero si ambas inserciones (pago y actualización de perfil) concluyen satisfactoriamente.
+     */
     public boolean registrarPago(int idUsuarioEnviado, int idPlan, double monto, String metodo, int idEmpresa) {
         // Los pagos recibidos físicamente en recepción nacen como APROBADOS
         String sql = "INSERT INTO pagos (id_cliente, id_membresia, monto_pagado, metodo_pago, fecha_pago, id_empresa, estado) " +
@@ -293,7 +352,7 @@ public class RecepcionDAO {
 
                 int filasAfectadas = ps.executeUpdate();
                 if (filasAfectadas > 0) {
-                    // Al ser un pago en mostrador, se le activa la membresía automáticamente
+                    // Al ser un pago en mostrador, se le activa la membresía automáticamente extendiéndola por 1 mes
                     String sqlCliente = "UPDATE clientes SET id_membresia = ?, fecha_vencimiento = CURRENT_DATE + INTERVAL '1 month', cancelado = FALSE " +
                             "WHERE id_usuario = ?";
                     try (PreparedStatement ps2 = conn.prepareStatement(sqlCliente)) {
@@ -319,6 +378,14 @@ public class RecepcionDAO {
     // ==========================================
     // 6. OBTENER PAGOS PENDIENTES DE REVISIÓN
     // ==========================================
+
+    /**
+     * OBTENER LISTADO DE PAGOS PENDIENTES
+     * Selecciona todos los comprobantes de depósito o transferencias enviadas por los clientes
+     * a través del portal en línea que aguardan por validación humana, ordenándolos cronológicamente.
+     * Parametro idEmpresa: Identificador de la sucursal correspondiente.
+     * Retorna: JSON Array detallado con la información y referencias visuales de los pagos a revisar.
+     */
     public String obtenerPagosPendientesJSON(int idEmpresa) {
         StringBuilder json = new StringBuilder("[");
         String sql = "SELECT p.id_pago, u.usuario AS nombre_cliente, p.monto_pagado, " +
@@ -361,6 +428,17 @@ public class RecepcionDAO {
     // ==========================================
     // 7. VERIFICAR PAGO (APROBAR Y ACTIVAR MEMBRESÍA O RECHAZAR)
     // ==========================================
+
+    /**
+     * VERIFICAR COMPROBANTE DE PAGO
+     * Consolida la decisión del auditor de recepción sobre un comprobante. Si el pago es marcado
+     * como 'APROBADO', se inicia una transacción que actualiza el estado económico y renueva
+     * automáticamente el acceso del cliente a las instalaciones por un periodo de un mes.
+     * Parametro idPago: Identificador del comprobante revisado.
+     * Parametro estado: Dictamen final ('APROBADO' o 'RECHAZADO').
+     * Parametro idMembresia: Identificador del plan a activar en caso de aprobación.
+     * Retorna: Verdadero tras la culminación exitosa del proceso de base de datos.
+     */
     public boolean verificarPago(int idPago, String estado, int idMembresia) {
         Connection conn = null;
         try {
@@ -399,7 +477,14 @@ public class RecepcionDAO {
     // MÉTODOS DE VALIDACIÓN E INTEGRIDAD (NUEVOS)
     // ==========================================
 
-    // Valida que el cliente exista y pertenezca a la empresa que está cobrando
+    /**
+     * VALIDAR PERTENENCIA A SUCURSAL
+     * Verifica que un cliente específico se encuentre registrado legítimamente dentro de la sucursal
+     * donde intenta operar o de donde recibe el cobro.
+     * Parametro idUsuario: Identificador de la cuenta del cliente.
+     * Parametro idEmpresa: Identificador de la sucursal de cotejo.
+     * Retorna: Verdadero si la asociación es comprobable.
+     */
     public boolean existeUsuarioEnEmpresa(int idUsuario, int idEmpresa) {
         String sql = "SELECT COUNT(*) FROM clientes c INNER JOIN usuarios u ON c.id_usuario = u.id_usuario WHERE u.id_usuario = ? AND u.id_empresa = ?";
         try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -412,7 +497,14 @@ public class RecepcionDAO {
         return false;
     }
 
-    // Valida que el plan vendido realmente pertenezca a la empresa
+    /**
+     * VALIDAR ELEGIBILIDAD DEL PLAN
+     * Confirma que una membresía solicitada para pago corresponda efectivamente a un plan
+     * ofertado por la sucursal actual, previniendo alteraciones o inconsistencias entre sedes.
+     * Parametro idPlan: Identificador de la membresía comercializada.
+     * Parametro idEmpresa: Identificador de la empresa vendedora.
+     * Retorna: Verdadero si la integridad relacional del plan es válida.
+     */
     public boolean existePlanEnEmpresa(int idPlan, int idEmpresa) {
         String sql = "SELECT COUNT(*) FROM membresias WHERE id_membresia = ? AND id_empresa = ?";
         try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -425,7 +517,14 @@ public class RecepcionDAO {
         return false;
     }
 
-    // Previene que se vuelva a aprobar/rechazar un pago que ya no está pendiente
+    /**
+     * VALIDAR ESTADO DEL COMPROBANTE PENDIENTE
+     * Salvaguarda empleada durante la validación de pagos para asegurar que el sistema
+     * no intente re-procesar (doble aprobación o rechazo) un pago que ya había sido dictaminado.
+     * Parametro idPago: Identificador del pago a validar.
+     * Parametro idEmpresa: Identificador de la sucursal por motivos de auditoría cruzada.
+     * Retorna: Verdadero si el comprobante aún se encuentra en estado 'PENDIENTE'.
+     */
     public boolean esPagoPendienteValido(int idPago, int idEmpresa) {
         String sql = "SELECT COUNT(*) FROM pagos WHERE id_pago = ? AND id_empresa = ? AND estado = 'PENDIENTE'";
         try (Connection conn = ConexionDB.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {

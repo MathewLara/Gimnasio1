@@ -1,3 +1,7 @@
+/**
+ * Autor: Mathew Lara
+ * Fecha: 08/06/2026
+ */
 package com.mathew.gimnasio.controladores;
 
 import com.mathew.gimnasio.dao.EntrenadorDAO;
@@ -7,11 +11,24 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
+/**
+ * CONTROLADOR DE ENTRENADORES
+ * Gestiona las operaciones del módulo de entrenadores, incluyendo la visualización del dashboard,
+ * la creación y edición de rutinas de ejercicios, la vinculación con alumnos
+ * y la administración del catálogo de ejercicios.
+ */
 @Path("/entrenadores")
 public class EntrenadorController {
 
     private EntrenadorDAO dao = new EntrenadorDAO();
 
+    /**
+     * OBTENER MÉTRICAS DEL DASHBOARD DEL ENTRENADOR (GET)
+     * Recupera el resumen estadístico y las métricas clave para el panel principal del entrenador.
+     * Parametro idUsuario: Identificador único del entrenador.
+     * Parametro idEmpresa: Identificador de la sucursal.
+     * Retorna: Objeto JSON con la información del dashboard o error 404 si no se encuentra.
+     */
     @GET
     @Path("/{idUsuario}/dashboard")
     @Produces(MediaType.APPLICATION_JSON)
@@ -26,6 +43,15 @@ public class EntrenadorController {
         return Response.status(Response.Status.NOT_FOUND).build();
     }
 
+    /**
+     * CREAR NUEVA RUTINA DE ENTRENAMIENTO (POST)
+     * Valida y almacena una nueva rutina en la biblioteca personal del entrenador,
+     * asegurando que no existan duplicados por nombre.
+     * Parametro idUsuario: Identificador del entrenador creador.
+     * Parametro idEmpresa: Identificador de la sucursal.
+     * Parametro datos: Objeto que contiene el nombre de la rutina y la lista de IDs de ejercicios.
+     * Retorna: Confirmación de guardado exitoso o mensaje de error detallado en caso de conflicto.
+     */
     @POST
     @Path("/{idUsuario}/crearRutina")
     @Consumes(MediaType.APPLICATION_JSON)
@@ -52,6 +78,16 @@ public class EntrenadorController {
         return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"mensaje\": \"Error interno al guardar la rutina.\"}").build();
     }
 
+    /**
+     * MODIFICAR RUTINA EXISTENTE (PUT)
+     * Edita los detalles de una rutina previamente guardada, verificando que
+     * el nuevo nombre no genere conflictos en la biblioteca del entrenador.
+     * Parametro idRutina: Identificador de la rutina a modificar.
+     * Parametro idUsuario: Identificador del entrenador.
+     * Parametro idEmpresa: Identificador de la sucursal.
+     * Parametro datos: Objeto con los datos actualizados de la rutina.
+     * Retorna: Estado de la actualización en la base de datos.
+     */
     @PUT
     @Path("/rutinas/{idRutina}")
     @Consumes(MediaType.APPLICATION_JSON)
@@ -77,6 +113,13 @@ public class EntrenadorController {
         return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"mensaje\": \"Error al editar la rutina en la base de datos.\"}").build();
     }
 
+    /**
+     * ELIMINAR RUTINA (DELETE)
+     * Desactiva una rutina específica (borrado lógico), moviéndola a la papelera
+     * en lugar de eliminarla físicamente para mantener el historial.
+     * Parametro idRutina: Identificador de la rutina a desactivar.
+     * Retorna: Confirmación de la operación de borrado lógico.
+     */
     @DELETE
     @Path("/rutinas/{idRutina}")
     @Produces(MediaType.APPLICATION_JSON)
@@ -87,6 +130,13 @@ public class EntrenadorController {
         return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"mensaje\": \"Error al eliminar la rutina.\"}").build();
     }
 
+    /**
+     * RESTAURAR RUTINA ELIMINADA (PUT)
+     * Reactiva una rutina que había sido enviada a la papelera, volviéndola a hacer visible.
+     * Parametro idRutina: Identificador de la rutina.
+     * Parametro idEmpresa: Identificador de la sucursal.
+     * Retorna: Confirmación de la restauración exitosa.
+     */
     @PUT
     @Path("/rutinas/{idRutina}/reactivar")
     @Produces(MediaType.APPLICATION_JSON)
@@ -97,6 +147,14 @@ public class EntrenadorController {
         return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"mensaje\": \"Error al restaurar la rutina.\"}").build();
     }
 
+    /**
+     * VINCULAR ALUMNO A RUTINA (POST)
+     * Asigna un plan de entrenamiento a un alumno específico, verificando previamente
+     * que no se excedan los límites máximos permitidos en la base de datos.
+     * Parametro idUsuario: Identificador del entrenador.
+     * Parametro datos: Objeto con la información de la vinculación y el alumno.
+     * Retorna: Mensaje de éxito o advertencia si se alcanzó el límite de asignaciones.
+     */
     @POST
     @Path("/{idUsuario}/alumnos")
     @Consumes(MediaType.APPLICATION_JSON)
@@ -114,6 +172,14 @@ public class EntrenadorController {
         }
     }
 
+    /**
+     * ACTUALIZAR ASIGNACIÓN DE ALUMNO (PUT)
+     * Añade una nueva rutina a la lista activa de un alumno, asegurando
+     * las restricciones de cantidad máxima establecidas por negocio.
+     * Parametro idUsuario: Identificador del entrenador.
+     * Parametro datos: Datos actualizados de la vinculación a procesar.
+     * Retorna: Confirmación o mensaje de error por límite superado.
+     */
     @PUT
     @Path("/{idUsuario}/alumnos")
     @Consumes(MediaType.APPLICATION_JSON)
@@ -130,6 +196,13 @@ public class EntrenadorController {
         }
     }
 
+    /**
+     * DESVINCULAR ALUMNO (DELETE)
+     * Retira a un alumno de la cartera activa del entrenador de manera segura.
+     * Parametro idUsuario: Identificador del entrenador.
+     * Parametro idCliente: Identificador del alumno a desvincular.
+     * Retorna: Estado de la operación de desvinculación.
+     */
     @DELETE
     @Path("/{idUsuario}/alumnos/{idCliente}")
     @Produces(MediaType.APPLICATION_JSON)
@@ -140,6 +213,13 @@ public class EntrenadorController {
         return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"mensaje\": \"Error al desvincular al alumno.\"}").build();
     }
 
+    /**
+     * OBTENER AGENDA DEL DÍA (GET)
+     * Recupera la lista de actividades o alumnos programados para el día actual del entrenador.
+     * Parametro id: Identificador del entrenador.
+     * Parametro idEmpresa: Identificador de la sucursal.
+     * Retorna: Lista JSON con los registros de la agenda para el día en curso.
+     */
     @GET
     @Path("/{idUsuario}/agenda")
     @Produces(MediaType.APPLICATION_JSON)
@@ -151,6 +231,12 @@ public class EntrenadorController {
     // ==========================================
     // ENDPOINTS DE EJERCICIOS
     // ==========================================
+
+    /**
+     * OBTENER CATÁLOGO DE EJERCICIOS (GET)
+     * Recupera la lista completa de ejercicios disponibles en el sistema para armar rutinas.
+     * Retorna: JSON Array con todos los ejercicios registrados.
+     */
     @GET
     @Path("/ejercicios")
     @Produces(MediaType.APPLICATION_JSON)
@@ -158,6 +244,13 @@ public class EntrenadorController {
         return Response.ok(dao.obtenerEjerciciosJSON()).build();
     }
 
+    /**
+     * CREAR NUEVO EJERCICIO (POST)
+     * Añade un nuevo ejercicio al catálogo general, validando que el nombre no exista previamente
+     * para evitar redundancias en la base de datos.
+     * Parametro data: Mapa JSON con el nombre y grupo muscular del ejercicio.
+     * Retorna: Confirmación de creación exitosa o mensaje de conflicto por duplicidad.
+     */
     @POST
     @Path("/ejercicios")
     @Consumes(MediaType.APPLICATION_JSON)
@@ -184,6 +277,14 @@ public class EntrenadorController {
         return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"mensaje\":\"Error al crear en base de datos\"}").build();
     }
 
+    /**
+     * EDITAR EJERCICIO EXISTENTE (PUT)
+     * Modifica los datos de un ejercicio registrado, asegurando la integridad
+     * de los nombres únicos en el catálogo durante la actualización.
+     * Parametro id: Identificador del ejercicio a modificar.
+     * Parametro data: Mapa JSON con el nombre y grupo actualizados.
+     * Retorna: Respuesta indicando el resultado de la operación en base de datos.
+     */
     @PUT
     @Path("/ejercicios/{id}")
     @Consumes(MediaType.APPLICATION_JSON)
@@ -210,6 +311,14 @@ public class EntrenadorController {
         return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"mensaje\":\"Error al actualizar en base de datos\"}").build();
     }
 
+    /**
+     * CAMBIAR ESTADO DE EJERCICIO (PUT)
+     * Habilita o deshabilita un ejercicio específico mediante borrado lógico,
+     * permitiendo ocultarlo sin afectar historiales de rutinas pasadas.
+     * Parametro id: Identificador del ejercicio.
+     * Parametro activo: Booleano con el nuevo estado a aplicar.
+     * Retorna: Confirmación del cambio de estado.
+     */
     @PUT
     @Path("/ejercicios/{id}/estado")
     @Produces(MediaType.APPLICATION_JSON)

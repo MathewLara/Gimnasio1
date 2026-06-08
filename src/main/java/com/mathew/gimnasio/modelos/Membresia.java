@@ -1,12 +1,21 @@
+/**
+ * Autor: Mathew Lara
+ * Fecha: 08/06/2026
+ */
 package com.mathew.gimnasio.modelos;
 
+/**
+ * MODELO DE MEMBRESÍA
+ * Representa la entidad de plan comercial disponible para la suscripción de los clientes.
+ */
 public class Membresia {
     private int id;
     private String nombre;
     private double precio;
-    private String descripcion; // Cambiamos 'dias' por 'descripcion' según tu BD
+    private String descripcion;
 
-    // Getters y Setters
+    // --- Getters y Setters ---
+
     public int getId() { return id; }
     public void setId(int id) { this.id = id; }
 

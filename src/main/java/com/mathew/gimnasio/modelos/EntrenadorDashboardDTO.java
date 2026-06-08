@@ -1,41 +1,39 @@
+/**
+ * Autor: Mathew Lara
+ * Fecha: 08/06/2026
+ */
 package com.mathew.gimnasio.modelos;
 
 import java.io.Serializable;
 import java.util.List;
 
 /**
- * CLASE DTO DEL DASHBOARD DEL ENTRENADOR
- * Este DTO es complejo y jerárquico. Centraliza toda la telemetría,
- * agenda y biblioteca de rutinas que el entrenador necesita ver al iniciar sesión.
+ * DTO DEL DASHBOARD DEL ENTRENADOR
+ * Estructura de datos jerárquica que centraliza la telemetría operativa del entrenador,
+ * incluyendo agenda, biblioteca de rutinas y cartera de alumnos, permitiendo una
+ * carga eficiente de la interfaz mediante un único contrato de transferencia.
  */
 public class EntrenadorDashboardDTO implements Serializable {
 
-    // --- Datos Básicos del Entrenador ---
     public String nombre;
     public String especialidad;
-
-    // --- Contadores de Rendimiento (KPIs) ---
     public int rutinasCreadas;
     public int totalAlumnos;
 
-    // --- Biblioteca de Rutinas ---
-    // Usamos una clase anidada para enviar solo los datos necesarios al Front
     public List<RutinaItem> listaRutinas;
-
-    // --- Cartera de Alumnos ---
     public List<AlumnoResumen> listaAlumnos;
 
     /**
      * SUBCLASE: RESUMEN DE ALUMNO
-     * Estructura plana para renderizar la tabla de "Mis Alumnos" en el Frontend
-     * sin necesidad de cargar toda la entidad "Cliente" desde la base de datos.
+     * Representación plana optimizada para la renderización de tablas de seguimiento
+     * de alumnos sin necesidad de instanciar entidades completas.
      */
     public static class AlumnoResumen {
         public int idCliente;
         public String nombre;
         public String plan;
         public String rutina;
-        public boolean terminoHoy; // Bandera booleana para marcar la asistencia en la agenda
+        public boolean terminoHoy;
 
         public AlumnoResumen(int id, String n, String p, String r, boolean t) {
             this.idCliente = id;
@@ -48,15 +46,15 @@ public class EntrenadorDashboardDTO implements Serializable {
 
     /**
      * SUBCLASE: ITEM DE RUTINA
-     * Sirve para listar la biblioteca de rutinas del entrenador.
-     * Contiene banderas vitales para permitir su edición y clonación.
+     * Define los atributos necesarios para el control y gestión de la biblioteca personal
+     * de rutinas, incluyendo indicadores de estado lógico.
      */
     public static class RutinaItem implements Serializable {
         public int id;
         public String nombre;
-        public boolean activa; // Bandera de borrado lógico (True = Activa, False = En Papelera)
-        public int idCliente;  // Identificador del propietario (Si es 0, es una Plantilla base)
-        public List<Integer> idsEjercicios; // Lista de IDs para marcar los checkboxes al editar
+        public boolean activa;
+        public int idCliente;
+        public List<Integer> idsEjercicios;
 
         public RutinaItem(int id, String nombre, boolean activa, int idCliente) {
             this.id = id;

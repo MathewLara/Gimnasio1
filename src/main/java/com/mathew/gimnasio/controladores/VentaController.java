@@ -1,3 +1,7 @@
+/**
+ * Autor: Mathew Lara
+ * Fecha: 08/06/2026
+ */
 package com.mathew.gimnasio.controladores;
 
 import com.mathew.gimnasio.dao.VentaDAO;
@@ -9,55 +13,55 @@ import jakarta.ws.rs.core.Response;
 
 /**
  * CONTROLADOR DE VENTAS
- * * Este componente es el "Cajero" de nuestro gimnasio. Su función principal es recibir
- * las solicitudes de compra de la tienda online, verificar que el carrito sea válido
- * y dar la orden para que la venta se guarde de forma permanente en los registros.
+ * Administra el flujo de transacciones comerciales del sistema. 
+ * Procesa las solicitudes de compra desde la tienda virtual, verifica la integridad 
+ * de los carritos de productos y gestiona el registro persistente de ventas y membresías.
  */
 @Path("/ventas")
 public class VentaController {
 
-    // El VentaDAO es el encargado de escribir en las tablas de 'ventas' y 'detalles_ventas'
+    // Componente de acceso a datos responsable de la persistencia en tablas de ventas y detalles.
     private VentaDAO ventaDAO = new VentaDAO();
 
     /**
-     * PROCESAR UNA VENTA
-     * * Este metodo se activa cuando el cliente presiona el botón "Finalizar Compra" en la tienda.
-     * Recibe un objeto con el ID del cliente, el total de dinero y la lista de productos.
-     * * URL: POST /api/ventas
-     * @param venta Objeto que contiene toda la información del carrito de compras.
-     * @return Respuesta confirmando si la compra se realizó o si hubo un problema.
+     * PROCESAR UNA VENTA (POST)
+     * Procesa y registra una nueva transacción comercial al finalizar una compra en línea.
+     * Valida los datos entrantes y consolida la cabecera de la venta junto con sus ítems.
+     * Parametro venta: Objeto estructurado que contiene la información completa del carrito.
+     * Retorna: Confirmación HTTP indicando si la transacción se guardó correctamente.
      */
     @POST
-    @Consumes(MediaType.APPLICATION_JSON) // Recibe la lista de compras en formato JSON
-    @Produces(MediaType.APPLICATION_JSON) // Responde con un mensaje de confirmación en JSON
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
     public Response procesarVenta(SolicitudVenta venta) {
-        // Imprimimos en la consola del servidor para que el programador vea que llegó la petición
+        // Traza de auditoría para el registro de entrada de transacciones
         System.out.println("Recibiendo venta por total: " + venta.getTotal());
 
-        /** VALIDACIÓN DE SEGURIDAD:
-         * Antes de intentar guardar, verificamos que el carrito no llegue vacío.
-         * Si no hay productos, respondemos con un error 400 (Petición incorrecta).
-         */
+        // 1. Validación Estructural y de Negocio
+        // Verifica que la solicitud contenga un listado válido de productos antes de proceder.
         if (venta.getProductos() == null || venta.getProductos().isEmpty()) {
             return Response.status(400).entity("{\"mensaje\":\"El carrito está vacío\"}").build();
         }
 
-        /* * LLAMADA AL DAO:
-         * Le pedimos al VentaDAO que guarde la información en PostgreSQL.
-         * El DAO se encargará de insertar la cabecera de la venta y cada uno de sus productos.
-         */
+        // 2. Persistencia de Datos
+        // Delega la inserción relacional (cabecera y detalles) a la capa de acceso a datos.
         boolean exito = ventaDAO.registrarVenta(venta);
 
         if (exito) {
-            // Si el DAO nos confirma que se guardó bien, enviamos el mensaje de éxito
+            // Retorna confirmación de transacción exitosa al cliente
             return Response.ok("{\"mensaje\":\"Venta procesada correctamente\", \"status\":\"OK\"}").build();
         } else {
-            // Si hubo un error (ej. se cayó la base de datos), enviamos un error 500
+            // Manejo de excepciones o fallos en el motor de base de datos
             return Response.status(500).entity("{\"mensaje\":\"Error al guardar la venta en la base de datos\"}").build();
         }
     }
+
     /**
-     * ENDPOINT: PAGO DE MEMBRESÍA
+     * PAGO DE MEMBRESÍA (POST)
+     * Registra la recepción de un comprobante de pago asociado a la renovación o 
+     * adquisición de una membresía, asignándole un estado de revisión pendiente.
+     * Parametro payload: Mapa JSON que incluye información del usuario, la membresía seleccionada, el monto y la evidencia fotográfica.
+     * Retorna: Notificación de paso a estado de validación o mensaje de error.
      */
     @POST
     @Path("/membresia")
@@ -70,7 +74,7 @@ public class VentaController {
             double monto = Double.parseDouble(payload.get("monto").toString());
             int idEmpresa = Integer.parseInt(payload.get("idEmpresa").toString());
 
-            // Recibimos los 3 datos nuevos del comprobante
+            // Extracción de datos complementarios del comprobante, aplicando valores por defecto si aplican.
             String comprobanteFoto = payload.get("comprobanteFoto").toString();
             String numeroReferencia = payload.containsKey("numeroReferencia") ? payload.get("numeroReferencia").toString() : "S/N";
             String motivo = payload.containsKey("motivo") ? payload.get("motivo").toString() : "Renovación";
@@ -79,7 +83,7 @@ public class VentaController {
                 return Response.status(400).entity("{\"mensaje\":\"Datos de pago inválidos\"}").build();
             }
 
-            // Pasamos todo al DAO
+            // Delegación del registro de la transacción a la capa DAO
             String resultado = ventaDAO.registrarPagoMembresia(idUsuario, idMembresia, monto, comprobanteFoto, numeroReferencia, motivo, idEmpresa);
 
             if (resultado.equals("OK")) {
@@ -91,26 +95,34 @@ public class VentaController {
             return Response.status(400).entity("{\"mensaje\":\"Faltan datos o la foto en el formulario\"}").build();
         }
     }
+
     /**
-     * ENDPOINT: Obtener pedidos pendientes para el Dashboard del Admin
-     * GET /api/ventas/pendientes
+     * OBTENER VENTAS PENDIENTES (GET)
+     * Recupera el listado de transacciones o pedidos comerciales que requieren 
+     * entrega física o atención por parte del personal administrativo.
+     * Parametro idEmpresa: Identificador numérico de la empresa a consultar.
+     * Retorna: Lista en formato JSON de objetos VentaPendienteDTO.
      */
     @GET
     @Path("/pendientes")
     @Produces(MediaType.APPLICATION_JSON)
     public Response getVentasPendientes(@QueryParam("idEmpresa") int idEmpresa) {
-        // Validación de seguridad
+        // Validación de credenciales o identificadores requeridos
         if (idEmpresa == 0) {
             return Response.status(400).entity("{\"mensaje\":\"Falta la empresa\"}").build();
         }
 
-        // Le pasamos el ID de la empresa al DAO
+        // Extracción de la lista de transacciones inconclusas
         java.util.List<com.mathew.gimnasio.modelos.VentaPendienteDTO> pendientes = ventaDAO.obtenerVentasPendientes(idEmpresa);
         return Response.ok(pendientes).build();
     }
+
     /**
-     * ENDPOINT: Marcar un producto como entregado
-     * PUT /api/ventas/{id}/entregar
+     * MARCAR PRODUCTO COMO ENTREGADO (PUT)
+     * Actualiza el estado logístico de una factura específica indicando que 
+     * los productos correspondientes han sido despachados al cliente final.
+     * Parametro idFactura: Identificador único de la transacción a actualizar.
+     * Retorna: Confirmación de actualización del estado de entrega.
      */
     @PUT
     @Path("/{id}/entregar")
@@ -124,9 +136,13 @@ public class VentaController {
             return Response.status(500).entity("{\"mensaje\":\"Error al actualizar el estado de la entrega\"}").build();
         }
     }
+
     /**
-     * ENDPOINT: Obtener detalles de una factura para imprimir
-     * GET /api/ventas/{id}/detalles
+     * OBTENER DETALLES DE FACTURA (GET)
+     * Extrae el desglose completo de los ítems asociados a una transacción 
+     * específica, ideal para visualización de recibos o impresión física.
+     * Parametro idFactura: Identificador único de la factura.
+     * Retorna: Lista de mapas JSON con el detalle de artículos de la venta.
      */
     @GET
     @Path("/{id}/detalles")

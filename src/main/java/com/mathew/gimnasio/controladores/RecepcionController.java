@@ -1,3 +1,7 @@
+/**
+ * Autor: Mathew Lara
+ * Fecha: 08/06/2026
+ */
 package com.mathew.gimnasio.controladores;
 
 import com.mathew.gimnasio.dao.RecepcionDAO;
@@ -6,11 +10,24 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
+/**
+ * CONTROLADOR DE RECEPCIÓN
+ * Gestiona las operaciones diarias del personal de mostrador,
+ * incluyendo el control de acceso de los socios mediante códigos QR,
+ * el registro rápido de pagos presenciales y la verificación de comprobantes.
+ */
 @Path("/recepcion")
 public class RecepcionController {
 
     private RecepcionDAO dao = new RecepcionDAO();
 
+    /**
+     * OBTENER DASHBOARD DE RECEPCIÓN (GET)
+     * Recupera las métricas rápidas necesarias para la pantalla principal del mostrador,
+     * como accesos del día o alertas de pagos pendientes.
+     * Parametro idEmpresa: Identificador numérico de la sucursal.
+     * Retorna: JSON estructurado con la información del dashboard o error si el ID es inválido.
+     */
     @GET
     @Path("/dashboard")
     @Produces(MediaType.APPLICATION_JSON)
@@ -22,6 +39,14 @@ public class RecepcionController {
         return Response.ok(jsonRespuesta).build();
     }
 
+    /**
+     * REGISTRAR ACCESO DE SOCIOS (POST)
+     * Procesa la lectura de un código QR para validar si un cliente tiene acceso
+     * permitido a las instalaciones en ese momento.
+     * Parametro identificador: Código alfanumérico leído del QR del socio.
+     * Parametro idEmpresa: Identificador de la sucursal donde se intenta acceder.
+     * Retorna: Confirmación de acceso concedido o mensaje detallado de denegación (ej. falta de pago).
+     */
     @POST
     @Path("/acceso")
     @Produces(MediaType.APPLICATION_JSON)
@@ -35,6 +60,13 @@ public class RecepcionController {
         return Response.ok(resultado).build();
     }
 
+    /**
+     * LISTAR SOCIOS DE LA SUCURSAL (GET)
+     * Provee al personal de recepción un listado completo de los clientes activos
+     * pertenecientes exclusivamente a su sucursal.
+     * Parametro idEmpresa: Identificador de la empresa.
+     * Retorna: JSON Array con la información de los socios.
+     */
     @GET
     @Path("/socios")
     @Produces(MediaType.APPLICATION_JSON)
@@ -46,6 +78,13 @@ public class RecepcionController {
         return Response.ok(jsonRespuesta).build();
     }
 
+    /**
+     * OBTENER HISTORIAL DE PAGOS (GET)
+     * Recupera el registro de las transacciones financieras procesadas en el mostrador
+     * para facilitar el cierre de caja.
+     * Parametro idEmpresa: Identificador de la sucursal.
+     * Retorna: Colección JSON con el historial de pagos.
+     */
     @GET
     @Path("/pagos")
     @Produces(MediaType.APPLICATION_JSON)
@@ -57,6 +96,13 @@ public class RecepcionController {
         return Response.ok(jsonRespuesta).build();
     }
 
+    /**
+     * REGISTRAR NUEVO PAGO EN MOSTRADOR (POST)
+     * Valida y procesa un pago físico o transferencia recibida directamente por el personal,
+     * asegurando que los montos y métodos sean válidos antes de activar la membresía.
+     * Parametro payload: Mapa JSON que contiene idCliente, idPlan, monto, metodo e idEmpresa.
+     * Retorna: Estado de la operación de cobro y activación de membresía.
+     */
     @POST
     @Path("/pagos")
     @Consumes(MediaType.APPLICATION_JSON)
@@ -127,6 +173,13 @@ public class RecepcionController {
         }
     }
 
+    /**
+     * OBTENER PAGOS PENDIENTES DE VERIFICACIÓN (GET)
+     * Recupera la lista de comprobantes que los clientes han subido desde su portal
+     * para que recepción los revise y apruebe.
+     * Parametro idEmpresa: Identificador de la sucursal.
+     * Retorna: JSON Array con los pagos en estado pendiente.
+     */
     @GET
     @Path("/pagos-pendientes")
     @Produces(MediaType.APPLICATION_JSON)
@@ -138,6 +191,13 @@ public class RecepcionController {
         return Response.ok(jsonRespuesta).build();
     }
 
+    /**
+     * VERIFICAR COMPROBANTE DE PAGO (POST)
+     * Procesa la decisión del personal de recepción sobre un comprobante pendiente
+     * (Aprobado o Rechazado), aplicando la lógica de activación correspondiente.
+     * Parametro payload: Datos de la transacción incluyendo el ID del pago, el nuevo estado y el ID de membresía.
+     * Retorna: Confirmación de la actualización del estado del pago.
+     */
     @POST
     @Path("/verificar-pago")
     @Consumes(MediaType.APPLICATION_JSON)
