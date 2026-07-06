@@ -116,7 +116,8 @@ public class ProductoDAO {
      * Modifica los datos de un producto existente.
      */
     public boolean actualizarProducto(Producto p) {
-        String sql = "UPDATE productos SET nombre = ?, descripcion = ?, precio = ?, tipo = ?, imagen_url = ? WHERE id_producto = ?";
+        String sql = "UPDATE productos SET nombre = ?, descripcion = ?, precio = ?, tipo = ?, "
+                   + "imagen_url = COALESCE(?, imagen_url) WHERE id_producto = ?";
         try (Connection conn = ConexionDB.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             

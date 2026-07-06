@@ -9,9 +9,13 @@ public class Producto implements Serializable {
     private double precio;
     private String tipo;
     private String imagenUrl;
+    private String imagenBase64;
     // No ponemos la imagen aquí para que la lista cargue rápido
 
     public Producto() {}
+
+    public String getImagenBase64() { return imagenBase64; }
+    public void setImagenBase64(String imagenBase64) { this.imagenBase64 = imagenBase64; }
 
     public int getIdProducto() { return idProducto; }
     public void setIdProducto(int idProducto) { this.idProducto = idProducto; }

@@ -6,6 +6,10 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.util.List;
+import java.util.Map;
+import com.cloudinary.Cloudinary;
+import com.cloudinary.utils.ObjectUtils;
+import com.mathew.gimnasio.configuracion.ConfiguracionEnv;
 
 /**
  * CONTROLADOR DE PRODUCTOS
@@ -64,6 +68,21 @@ public class ProductoController {
         }
     }
 
+    private void procesarImagenBase64(Producto p) {
+        if (p.getImagenBase64() != null && !p.getImagenBase64().isEmpty()) {
+            String cloudinaryUrl = ConfiguracionEnv.get("CLOUDINARY_URL", "");
+            if (!cloudinaryUrl.isEmpty()) {
+                try {
+                    Cloudinary cloudinary = new Cloudinary(cloudinaryUrl);
+                    Map uploadResult = cloudinary.uploader().upload(p.getImagenBase64(), ObjectUtils.emptyMap());
+                    p.setImagenUrl((String) uploadResult.get("secure_url"));
+                } catch (Exception e) {
+                    System.err.println("Error subiendo imagen base64 a Cloudinary: " + e.getMessage());
+                }
+            }
+        }
+    }
+
     /**
      * CREAR PRODUCTO
      * URL: POST /api/productos
@@ -72,6 +91,7 @@ public class ProductoController {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public Response crear(Producto p) {
+        procesarImagenBase64(p);
         if (dao.crearProducto(p)) {
             return Response.ok("{\"mensaje\":\"Producto creado correctamente\"}").build();
         } else {
@@ -90,6 +110,7 @@ public class ProductoController {
     @Produces(MediaType.APPLICATION_JSON)
     public Response actualizar(@PathParam("id") int id, Producto p) {
         p.setIdProducto(id);
+        procesarImagenBase64(p);
         if (dao.actualizarProducto(p)) {
             return Response.ok("{\"mensaje\":\"Producto actualizado\"}").build();
         } else {
