@@ -70,6 +70,26 @@ public class ProductoDAO {
     }
 
     /**
+     * OBTENER IMAGEN URL
+     * Consulta la URL de la imagen en Cloudinary almacenada en la base de datos.
+     * @param id El número de identificación del producto.
+     * @return La URL de la imagen o null si no tiene.
+     */
+    public String obtenerImagenUrl(int id) {
+        String sql = "SELECT imagen_url FROM productos WHERE id_producto = ?";
+        try (Connection conn = ConexionDB.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, id);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) {
+                return rs.getString("imagen_url");
+            }
+        } catch (Exception e) { e.printStackTrace(); }
+        return null;
+    }
+
+    /**
      * CREAR PRODUCTO
      * Inserta un nuevo producto en la base de datos de la tienda.
      */

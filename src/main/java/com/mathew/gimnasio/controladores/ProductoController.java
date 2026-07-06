@@ -45,6 +45,12 @@ public class ProductoController {
     @Path("/{id}/imagen")
     @Produces("image/jpeg") // Engañamos al navegador diciendo que es JPG (funciona con avif/png también)
     public Response obtenerImagen(@PathParam("id") int id) {
+        // Primero verificamos si hay una URL de Cloudinary
+        String url = dao.obtenerImagenUrl(id);
+        if (url != null && !url.trim().isEmpty() && (url.startsWith("http://") || url.startsWith("https://"))) {
+            return Response.temporaryRedirect(java.net.URI.create(url)).build();
+        }
+
         // El DAO busca en la columna de tipo 'bytea' (binario) de la base de datos
         byte[] imagenBytes = dao.obtenerImagen(id);
 
