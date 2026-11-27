@@ -22,9 +22,11 @@ import jakarta.ws.rs.core.Response;
 public class IaController {
 
     private static final String[] GEMINI_MODELS = {
+            "gemini-flash-lite-latest",
+            "gemini-flash-latest",
             "gemini-2.5-flash",
-            "gemini-2.5-flash-lite",
-            "gemini-3.8-flash"
+            "gemma-4-26b-a4b-it",
+            "gemma-4-31b-it"
     };
 
     @POST
