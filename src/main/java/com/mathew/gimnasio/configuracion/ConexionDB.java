@@ -17,9 +17,9 @@ import java.sql.SQLException;
 public class ConexionDB {
 
     // Constantes de conexión: Ruta, usuario y contraseña de la base de datos PostgreSQL alojada en Render
-    private static final String URL = "jdbc:postgresql://dpg-dab2v7s9v7es73bskjog-a.ohio-postgres.render.com:5432/gimnasiobd5?sslmode=require";
-    private static final String USER = "gimnasiobd5_user";
-    private static final String PASS = "n7yERykQ5pwYbhAD00lgA5vmdS0D41Op";
+    private static final String URL = "jdbc:postgresql://dpg-dc4ccip7lnhs7381jeug-a.ohio-postgres.render.com:5432/gimnasiobd6?sslmode=require";
+    private static final String USER = "gimnasiobd6_user";
+    private static final String PASS = "U9WJOvU5P46Iik7980NUXfBgfEe9Sn7y";
 
     /**
      * METODO PRINCIPAL DE CONEXIÓN
