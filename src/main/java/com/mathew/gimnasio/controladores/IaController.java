@@ -4,6 +4,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -20,7 +21,11 @@ import jakarta.ws.rs.core.Response;
 @Path("/ia")
 public class IaController {
 
-    private static final String GEMINI_MODEL = "gemini-3.8-flash";
+    private static final String[] GEMINI_MODELS = {
+            "gemini-2.5-flash",
+            "gemini-2.5-flash-lite",
+            "gemini-3.8-flash"
+    };
 
     @POST
     @Path("/generar-plan")
@@ -34,8 +39,6 @@ public class IaController {
                         .entity(new JSONObject().put("mensaje", "Falta configurar la variable de entorno GEMINI_API_KEY en Render.").toString())
                         .build();
             }
-
-            String geminiUrl = "https://generativelanguage.googleapis.com/v1beta/models/" + GEMINI_MODEL + ":generateContent?key=" + apiKey.trim();
 
             String prompt = String.format(
                     "Actúa como un entrenador personal y nutricionista deportivo de élite del gimnasio Iron Fitness. " +
@@ -55,16 +58,39 @@ public class IaController {
             JSONObject content = new JSONObject().put("parts", new JSONArray().put(part));
             JSONObject body = new JSONObject().put("contents", new JSONArray().put(content));
 
-            HttpClient client = HttpClient.newHttpClient();
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(geminiUrl))
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(body.toString()))
+            HttpClient client = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofSeconds(15))
                     .build();
 
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response = null;
+            String ultimoError = "No se obtuvo respuesta de la API de IA.";
 
-            if (response.statusCode() == 200) {
+            for (String model : GEMINI_MODELS) {
+                try {
+                    String geminiUrl = "[https://generativelanguage.googleapis.com/v1beta/models/](https://generativelanguage.googleapis.com/v1beta/models/)" + model + ":generateContent?key=" + apiKey.trim();
+
+                    HttpRequest request = HttpRequest.newBuilder()
+                            .uri(URI.create(geminiUrl))
+                            .timeout(Duration.ofSeconds(25))
+                            .header("Content-Type", "application/json")
+                            .POST(HttpRequest.BodyPublishers.ofString(body.toString()))
+                            .build();
+
+                    response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+                    if (response.statusCode() == 200) {
+                        break;
+                    } else {
+                        ultimoError = "Modelo " + model + " respondió " + response.statusCode() + ": " + response.body();
+                        System.err.println(ultimoError);
+                    }
+                } catch (Exception ex) {
+                    ultimoError = "Error consultando modelo " + model + ": " + ex.getMessage();
+                    System.err.println(ultimoError);
+                }
+            }
+
+            if (response != null && response.statusCode() == 200) {
                 JSONObject jsonRes = new JSONObject(response.body());
                 String textoIA = jsonRes.getJSONArray("candidates")
                         .getJSONObject(0)
@@ -79,7 +105,7 @@ public class IaController {
                 return Response.ok(respuesta.toString()).build();
             } else {
                 return Response.status(500)
-                        .entity(new JSONObject().put("mensaje", "Error en la API de IA: " + response.body()).toString())
+                        .entity(new JSONObject().put("mensaje", "Error en la API de IA: " + ultimoError).toString())
                         .build();
             }
 
