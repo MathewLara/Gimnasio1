@@ -100,4 +100,97 @@ public class AsistenciaController {
             return Response.status(500).entity("{\"mensaje\": \"Error interno\"}").build(); // HTTP 500
         }
     }
+    /**
+     * REGISTRO DE ASISTENCIA POR RECONOCIMIENTO FACIAL (APK / FastAPI)
+     * URL: POST /Gimnasio/api/accesos/facial/{idCliente}
+     * Retorna JSON con estado: ACCEPTED, REJECTED o DUPLICATE.
+     */
+    @POST
+    @Path("/facial/{idCliente}")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response procesarAccesoFacial(@PathParam("idCliente") int idCliente) {
+        try (Connection conn = ConexionDB.getConnection()) {
+
+            // 1. Verificar que el cliente exista, esté activo y revisar su vencimiento
+            String sqlCliente =
+                    "SELECT nombre, apellido, activo, fecha_vencimiento, " +
+                            "(fecha_vencimiento IS NOT NULL AND fecha_vencimiento >= CURRENT_DATE) AS membresia_vigente " +
+                            "FROM clientes WHERE id_cliente = ?";
+
+            String nombreCompleto = "";
+            boolean activo = false;
+            boolean membresiaVigente = false;
+            String fechaVencimiento = "N/A";
+
+            try (PreparedStatement psCl = conn.prepareStatement(sqlCliente)) {
+                psCl.setInt(1, idCliente);
+                try (ResultSet rsCl = psCl.executeQuery()) {
+                    if (!rsCl.next()) {
+                        return Response.status(404)
+                                .entity("{\"estado\": \"REJECTED\", \"mensaje\": \"Cliente no registrado en el sistema\"}")
+                                .build();
+                    }
+                    String nom = rsCl.getString("nombre") != null ? rsCl.getString("nombre").trim() : "";
+                    String ape = rsCl.getString("apellido") != null ? rsCl.getString("apellido").trim() : "";
+                    nombreCompleto = (nom + " " + ape).trim().replace("\"", "");
+                    activo = rsCl.getBoolean("activo");
+                    membresiaVigente = rsCl.getBoolean("membresia_vigente");
+                    if (rsCl.getDate("fecha_vencimiento") != null) {
+                        fechaVencimiento = rsCl.getDate("fecha_vencimiento").toString();
+                    }
+                }
+            }
+
+            if (!activo) {
+                return Response.status(403)
+                        .entity("{\"estado\": \"REJECTED\", \"cliente\": \"" + nombreCompleto + "\", \"mensaje\": \"Cuenta inactiva\"}")
+                        .build();
+            }
+
+            if (!membresiaVigente) {
+                return Response.status(403)
+                        .entity("{\"estado\": \"REJECTED\", \"cliente\": \"" + nombreCompleto + "\", \"fechaVencimiento\": \"" + fechaVencimiento + "\", \"mensaje\": \"Membresía vencida o inexistente\"}")
+                        .build();
+            }
+
+            // 2. Ventana de duplicados (5 minutos)
+            String sqlDup =
+                    "SELECT id_asistencia FROM asistencias " +
+                            "WHERE id_cliente = ? AND fecha_hora_ingreso >= (CURRENT_TIMESTAMP - INTERVAL '5 minutes') " +
+                            "ORDER BY id_asistencia DESC LIMIT 1";
+
+            try (PreparedStatement psDup = conn.prepareStatement(sqlDup)) {
+                psDup.setInt(1, idCliente);
+                try (ResultSet rsDup = psDup.executeQuery()) {
+                    if (rsDup.next()) {
+                        return Response.ok(
+                                "{\"estado\": \"DUPLICATE\", \"cliente\": \"" + nombreCompleto + "\", \"mensaje\": \"Asistencia ya registrada hace menos de 5 minutos\"}"
+                        ).build();
+                    }
+                }
+            }
+
+            // 3. Registrar asistencia válida
+            String codigoUnico = "FACIAL_" + idCliente + "_" + System.currentTimeMillis();
+            String sqlInsert =
+                    "INSERT INTO asistencias (id_cliente, fecha_hora_ingreso, dispositivo_qr, codigo_validado, estado) " +
+                            "VALUES (?, CURRENT_TIMESTAMP, 'Reconocimiento Facial', ?, 'ACTIVO')";
+
+            try (PreparedStatement psIns = conn.prepareStatement(sqlInsert)) {
+                psIns.setInt(1, idCliente);
+                psIns.setString(2, codigoUnico);
+                psIns.executeUpdate();
+            }
+
+            return Response.ok(
+                    "{\"estado\": \"ACCEPTED\", \"cliente\": \"" + nombreCompleto + "\", \"fechaVencimiento\": \"" + fechaVencimiento + "\", \"mensaje\": \"¡Bienvenido, " + nombreCompleto + "!\"}"
+            ).build();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Response.status(500)
+                    .entity("{\"estado\": \"ERROR\", \"mensaje\": \"Error interno al registrar asistencia\"}")
+                    .build();
+        }
+    }
 }
