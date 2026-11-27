@@ -67,7 +67,7 @@ public class IaController {
 
             for (String model : GEMINI_MODELS) {
                 try {
-                    String geminiUrl = "[https://generativelanguage.googleapis.com/v1beta/models/](https://generativelanguage.googleapis.com/v1beta/models/)" + model + ":generateContent?key=" + apiKey.trim();
+                    String geminiUrl = "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + apiKey.trim();
 
                     HttpRequest request = HttpRequest.newBuilder()
                             .uri(URI.create(geminiUrl))
